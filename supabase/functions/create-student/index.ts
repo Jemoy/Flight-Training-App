@@ -51,9 +51,9 @@ Deno.serve(async (req) => {
       return json({ error: 'Only admins can create student accounts' }, 403)
     }
 
-    const { full_name, email, password } = await req.json()
-    if (!full_name || !email || !password) {
-      return json({ error: 'full_name, email, and password are required' }, 400)
+    const { full_name, student_number, email, password } = await req.json()
+    if (!full_name || !student_number || !email || !password) {
+      return json({ error: 'full_name, student_number, email, and password are required' }, 400)
     }
     if (password.length < 6) {
       return json({ error: 'Password must be at least 6 characters' }, 400)
@@ -72,12 +72,16 @@ Deno.serve(async (req) => {
     const { error: insertError } = await adminClient.from('profiles').insert({
       id: newUser.user.id,
       full_name,
+      student_number,
       role: 'student',
     })
 
     if (insertError) {
       // Roll back the auth user so we don't leave an orphaned login with no profile
       await adminClient.auth.admin.deleteUser(newUser.user.id)
+      if (insertError.code === '23505') {
+        return json({ error: `Student ID number "${student_number}" is already in use.` }, 400)
+      }
       return json({ error: insertError.message }, 400)
     }
 

@@ -5,6 +5,7 @@ const PW_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
 
 export default function AdminCreateStudent() {
   const [fullName, setFullName] = useState('')
+  const [studentNumber, setStudentNumber] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -24,7 +25,7 @@ export default function AdminCreateStudent() {
     setSubmitting(true)
 
     const { data, error: invokeError } = await supabase.functions.invoke('create-student', {
-      body: { full_name: fullName, email, password },
+      body: { full_name: fullName, student_number: studentNumber, email, password },
     })
 
     if (invokeError) {
@@ -36,6 +37,7 @@ export default function AdminCreateStudent() {
         `Account created for ${fullName}. Email: ${email} · Password: ${password} — share these with the student directly, they aren't shown again.`
       )
       setFullName('')
+      setStudentNumber('')
       setEmail('')
       setPassword('')
     }
@@ -61,6 +63,16 @@ export default function AdminCreateStudent() {
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
+            required
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="studentNumber">Student ID number</label>
+          <input
+            id="studentNumber"
+            type="text"
+            value={studentNumber}
+            onChange={(e) => setStudentNumber(e.target.value)}
             required
           />
         </div>

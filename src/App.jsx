@@ -9,6 +9,7 @@ import Schedule from './pages/Schedule'
 import FacultyPayments from './pages/FacultyPayments'
 import FacultyEvaluations from './pages/FacultyEvaluations'
 import AdminCreateStudent from './pages/AdminCreateStudent'
+import FullSchedule from './pages/FullSchedule'
 import ProtectedRoute from './components/ProtectedRoute'
 import FacultyRoute from './components/FacultyRoute'
 
@@ -61,6 +62,14 @@ export default function App() {
           }
         />
         <Route
+          path="faculty/schedule"
+          element={
+            <FacultyRoute profile={profile} loading={profileLoading}>
+              <FullSchedule />
+            </FacultyRoute>
+          }
+        />
+        <Route
           path="admin/create-student"
           element={
             <FacultyRoute profile={profile} loading={profileLoading} roles={['admin']}>
@@ -98,6 +107,7 @@ function Shell({ profile }) {
               <div className="sidebar-divider">Faculty</div>
               <Link to="/faculty/payments">Verify payments</Link>
               <Link to="/faculty/evaluations">Evaluations</Link>
+              <Link to="/faculty/schedule">Full schedule</Link>
             </>
           )}
           {isAdmin && (

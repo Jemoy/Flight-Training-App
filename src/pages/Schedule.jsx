@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import Calendar from '../components/Calendar'
 
 export default function Schedule({ session }) {
   const [availability, setAvailability] = useState([]) // [{stage_id, stage_name, available_hours}]
@@ -13,9 +14,15 @@ export default function Schedule({ session }) {
   const [loading, setLoading] = useState(true)
   const [mySessions, setMySessions] = useState([])
 
+  // Calendar state
+  const [calView, setCalView] = useState('week')
+  const [calDate, setCalDate] = useState(new Date())
+  const [calEvents, setCalEvents] = useState([])
+
   useEffect(() => {
     loadAvailability()
     loadMySessions()
+    loadCalendar()
   }, [])
 
   async function loadAvailability() {
@@ -72,6 +79,56 @@ export default function Schedule({ session }) {
       .order('id', { ascending: false })
 
     setMySessions(data ?? [])
+  }
+
+  // Builds the calendar: every booked session (as "Booked", no names, for privacy)
+  // + this student's own sessions highlighted + this student's class schedule blocked out.
+  async function loadCalendar() {
+    const userId = session.user.id
+
+    const { data: allParticipants } = await supabase
+      .from('session_participants')
+      .select('student_id, sessions(id, scheduled_start, scheduled_end, status, stages(name))')
+
+    const { data: classes } = await supabase
+      .from('class_schedule')
+      .select('class_name, start_time, end_time')
+      .eq('student_id', userId)
+
+    const seenSessionIds = new Set()
+    const sessionEvents = []
+
+    for (const p of allParticipants ?? []) {
+      const s = p.sessions
+      if (!s || s.status === 'cancelled' || seenSessionIds.has(s.id)) continue
+      seenSessionIds.add(s.id)
+
+      const isMine = p.student_id === userId
+      sessionEvents.push({
+        id: `session-${s.id}`,
+        start: new Date(s.scheduled_start),
+        end: new Date(s.scheduled_end),
+        title: isMine ? `You: ${s.stages?.name ?? 'Session'}` : 'Booked',
+        type: isMine ? 'mine' : 'booked',
+      })
+    }
+
+    const classEvents = (classes ?? []).map((c, i) => ({
+      id: `class-${i}`,
+      start: new Date(c.start_time),
+      end: new Date(c.end_time),
+      title: c.class_name,
+      type: 'class',
+    }))
+
+    setCalEvents([...sessionEvents, ...classEvents])
+  }
+
+  function handleSlotClick(clickedDate) {
+    setDate(formatDateInput(clickedDate))
+    setStartTime(formatTimeInput(clickedDate))
+    // scroll the form into view on smaller screens
+    document.getElementById('booking-form')?.scrollIntoView({ behavior: 'smooth' })
   }
 
   async function handleSubmit(e) {
@@ -147,17 +204,26 @@ export default function Schedule({ session }) {
     setDate('')
     setStartTime('')
     setDurationHours('1')
-    await Promise.all([loadAvailability(), loadMySessions()])
+    await Promise.all([loadAvailability(), loadMySessions(), loadCalendar()])
     setSubmitting(false)
   }
 
   return (
-    <div className="main-content">
+    <div className="main-content main-content-wide">
       <div className="page-heading">Schedule a simulator session</div>
       <div className="page-subheading">
-        You can only book hours you have a verified payment for. Instructors are
-        assigned by the scheduling office, not chosen by you.
+        Click an open slot on the calendar to fill in the booking form, or enter a time
+        manually. Your classes and existing bookings are shown so you can avoid conflicts.
       </div>
+
+      <Calendar
+        view={calView}
+        currentDate={calDate}
+        onViewChange={setCalView}
+        onDateChange={setCalDate}
+        events={calEvents}
+        onSlotClick={handleSlotClick}
+      />
 
       {error && <div className="auth-error">{error}</div>}
       {successMsg && <div className="auth-success">{successMsg}</div>}
@@ -169,7 +235,7 @@ export default function Schedule({ session }) {
       )}
 
       {availability.length > 0 && (
-        <form onSubmit={handleSubmit} className="payment-form">
+        <form id="booking-form" onSubmit={handleSubmit} className="payment-form">
           <div className="field">
             <label htmlFor="stage">Stage</label>
             <select id="stage" value={stageId} onChange={(e) => setStageId(e.target.value)} required>
@@ -253,4 +319,17 @@ export default function Schedule({ session }) {
       )}
     </div>
   )
+}
+
+function formatDateInput(d) {
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+function formatTimeInput(d) {
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${hh}:${mm}`
 }
