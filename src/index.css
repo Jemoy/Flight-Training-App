@@ -544,6 +544,27 @@ a {
   margin-top: 14px;
 }
 
+.slot-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.slot-list li {
+  background: var(--cloud);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 12px;
+  font-size: 0.84rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .requested-slot {
   background: var(--cloud);
   border: 1px solid var(--border);
@@ -575,7 +596,34 @@ a {
 /* ---------- Calendar ---------- */
 
 .main-content-wide {
-  max-width: 1040px;
+  max-width: 1280px;
+}
+
+.payments-layout {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 28px;
+}
+
+.payments-layout .cal-wrap {
+  margin-bottom: 0;
+}
+
+.payments-layout .payment-form {
+  max-width: none;
+  position: sticky;
+  top: 20px;
+}
+
+@media (max-width: 900px) {
+  .payments-layout {
+    grid-template-columns: 1fr;
+  }
+  .payments-layout .payment-form {
+    position: static;
+  }
 }
 
 .cal-wrap {

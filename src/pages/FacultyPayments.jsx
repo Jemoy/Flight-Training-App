@@ -17,7 +17,7 @@ export default function FacultyPayments({ session }) {
     const { data, error } = await supabase
       .from('payments')
       .select(
-        'id, amount, hours_covered, receipt_url, status, submitted_at, student_id, stage_id, session_id, profiles(full_name), stages(name), sessions(scheduled_start, scheduled_end, status)'
+        'id, amount, hours_covered, receipt_url, status, submitted_at, student_id, stage_id, profiles(full_name), stages(name), sessions(id, scheduled_start, scheduled_end, status)'
       )
       .eq('status', 'pending')
       .order('submitted_at', { ascending: true })
@@ -59,15 +59,15 @@ export default function FacultyPayments({ session }) {
       return
     }
 
-    // Confirm the tentative session hold that came with this payment, if any
-    if (payment.session_id) {
+    const sessionIds = (payment.sessions ?? []).map((s) => s.id)
+    if (sessionIds.length > 0) {
       const { error: sessionErr } = await supabase
         .from('sessions')
         .update({ status: 'scheduled' })
-        .eq('id', payment.session_id)
+        .in('id', sessionIds)
 
       if (sessionErr) {
-        setError(`Payment verified, but could not confirm the schedule: ${sessionErr.message}`)
+        setError(`Payment verified, but could not confirm all slots: ${sessionErr.message}`)
         setBusyId(null)
         return
       }
@@ -98,15 +98,15 @@ export default function FacultyPayments({ session }) {
       return
     }
 
-    // Free up the calendar hold since the payment behind it wasn't approved
-    if (payment.session_id) {
+    const sessionIds = (payment.sessions ?? []).map((s) => s.id)
+    if (sessionIds.length > 0) {
       const { error: sessionErr } = await supabase
         .from('sessions')
         .update({ status: 'cancelled' })
-        .eq('id', payment.session_id)
+        .in('id', sessionIds)
 
       if (sessionErr) {
-        setError(`Payment rejected, but could not release the held slot: ${sessionErr.message}`)
+        setError(`Payment rejected, but could not release all held slots: ${sessionErr.message}`)
         setBusyId(null)
         return
       }
@@ -156,8 +156,15 @@ export default function FacultyPayments({ session }) {
                   </button>
                 </td>
                 <td>
-                  {p.sessions?.scheduled_start
-                    ? new Date(p.sessions.scheduled_start).toLocaleString()
+                  {p.sessions && p.sessions.length > 0
+                    ? p.sessions
+                        .map((s) =>
+                          new Date(s.scheduled_start).toLocaleString([], {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                          })
+                        )
+                        .join(', ')
                     : '—'}
                 </td>
                 <td>{new Date(p.submitted_at).toLocaleDateString()}</td>

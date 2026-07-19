@@ -8,7 +8,7 @@ export default function Payments({ session }) {
   const [amount, setAmount] = useState('')
   const [hoursCovered, setHoursCovered] = useState('')
   const [file, setFile] = useState(null)
-  const [requestedStart, setRequestedStart] = useState(null) // Date | null
+  const [selectedSlots, setSelectedSlots] = useState([]) // Date[], each a 1-hour slot start
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
@@ -19,6 +19,8 @@ export default function Payments({ session }) {
   const [calView, setCalView] = useState('week')
   const [calDate, setCalDate] = useState(new Date())
   const [calEvents, setCalEvents] = useState([])
+
+  const requiredSlots = Number(hoursCovered) || 0
 
   useEffect(() => {
     loadStages()
@@ -41,7 +43,7 @@ export default function Payments({ session }) {
     const { data, error } = await supabase
       .from('payments')
       .select(
-        'id, amount, hours_covered, status, submitted_at, stage_id, stages(name), sessions(scheduled_start, scheduled_end, status)'
+        'id, amount, hours_covered, status, submitted_at, stage_id, stages(name), sessions(scheduled_start, status)'
       )
       .eq('student_id', session.user.id)
       .order('submitted_at', { ascending: false })
@@ -50,8 +52,8 @@ export default function Payments({ session }) {
     setLoading(false)
   }
 
-  // Shows everyone's booked/pending sessions (no names, privacy) + this
-  // student's own class schedule, so they can pick a genuinely open slot.
+  // Everyone's booked/pending sessions (no names, privacy) + this student's
+  // own class schedule, so they can pick genuinely open 1-hour slots.
   async function loadCalendar() {
     const userId = session.user.id
 
@@ -98,14 +100,55 @@ export default function Payments({ session }) {
     setCalEvents([...sessionEvents, ...classEvents])
   }
 
-  function handleSlotClick(clickedDate) {
-    setRequestedStart(clickedDate)
+  function isSlotTaken(slotStart) {
+    const slotEnd = new Date(slotStart.getTime() + 60 * 60 * 1000)
+    return calEvents.some((e) => e.type !== 'class' ? slotStart < e.end && slotEnd > e.start : false)
   }
 
-  function requestedEndPreview() {
-    if (!requestedStart || !hoursCovered) return null
-    return new Date(requestedStart.getTime() + Number(hoursCovered) * 60 * 60 * 1000)
+  function isSlotSelected(slotStart) {
+    return selectedSlots.some((s) => s.getTime() === slotStart.getTime())
   }
+
+  function handleSlotClick(clickedDate) {
+    setError('')
+    const slotStart = new Date(clickedDate)
+    slotStart.setMinutes(0, 0, 0) // snap to the hour — bookings are per 1-hour block
+
+    if (isSlotSelected(slotStart)) {
+      setSelectedSlots((prev) => prev.filter((s) => s.getTime() !== slotStart.getTime()))
+      return
+    }
+
+    if (isSlotTaken(slotStart)) {
+      setError('That hour is already booked or pending. Pick another.')
+      return
+    }
+
+    if (!requiredSlots) {
+      setError('Enter "Hours this payment covers" first, so you know how many slots to pick.')
+      return
+    }
+
+    if (selectedSlots.length >= requiredSlots) {
+      setError(`You've already selected ${requiredSlots} hour(s). Remove one before adding another.`)
+      return
+    }
+
+    setSelectedSlots((prev) => [...prev, slotStart].sort((a, b) => a - b))
+  }
+
+  // Overlay the student's in-progress selections on the calendar as "mine" so
+  // they're visible before submitting (not yet saved to the database).
+  const displayEvents = [
+    ...calEvents,
+    ...selectedSlots.map((s, i) => ({
+      id: `selected-${i}`,
+      start: s,
+      end: new Date(s.getTime() + 60 * 60 * 1000),
+      title: 'Selected',
+      type: 'mine',
+    })),
+  ]
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -116,99 +159,104 @@ export default function Payments({ session }) {
       setError('Please fill in every field and choose a receipt file.')
       return
     }
-    if (!requestedStart) {
-      setError('Click a slot on the calendar above to request your simulator schedule.')
+    if (selectedSlots.length !== requiredSlots) {
+      setError(`Select exactly ${requiredSlots} one-hour slot(s) on the calendar — you've picked ${selectedSlots.length}.`)
       return
     }
 
     setSubmitting(true)
     const userId = session.user.id
-    const requestedEnd = requestedEndPreview()
 
-    // Conflict check against the student's own class schedule before submitting
+    // Conflict check against the student's own class schedule
     const { data: classes } = await supabase
       .from('class_schedule')
       .select('class_name, start_time, end_time')
       .eq('student_id', userId)
 
-    const conflict = (classes ?? []).find((c) => {
-      const cStart = new Date(c.start_time)
-      const cEnd = new Date(c.end_time)
-      return requestedStart < cEnd && requestedEnd > cStart
-    })
-
-    if (conflict) {
-      setError(`Your requested time conflicts with your class "${conflict.class_name}". Pick another slot.`)
-      setSubmitting(false)
-      return
+    for (const slot of selectedSlots) {
+      const slotEnd = new Date(slot.getTime() + 60 * 60 * 1000)
+      const conflict = (classes ?? []).find((c) => {
+        const cStart = new Date(c.start_time)
+        const cEnd = new Date(c.end_time)
+        return slot < cEnd && slotEnd > cStart
+      })
+      if (conflict) {
+        setError(`${slot.toLocaleString()} conflicts with your class "${conflict.class_name}". Remove that slot and pick another.`)
+        setSubmitting(false)
+        return
+      }
     }
 
-    // 1. Upload the receipt to the private 'receipts' bucket
+    // 1. Upload the receipt
     const filePath = `${userId}/${Date.now()}_${file.name}`
     const { error: uploadError } = await supabase.storage.from('receipts').upload(filePath, file)
-
     if (uploadError) {
       setError(`Upload failed: ${uploadError.message}`)
       setSubmitting(false)
       return
     }
 
-    // 2. Create the session as a tentative hold (status = pending) —
-    // it blocks the slot on the calendar but isn't a real booking yet.
-    const { data: newSession, error: sessionError } = await supabase
-      .from('sessions')
+    // 2. Create the payment first, so each session slot can reference it
+    const { data: newPayment, error: paymentError } = await supabase
+      .from('payments')
       .insert({
+        student_id: userId,
         stage_id: stageId,
-        scheduled_start: requestedStart.toISOString(),
-        scheduled_end: requestedEnd.toISOString(),
+        amount: Number(amount),
+        hours_covered: Number(hoursCovered),
+        receipt_url: filePath,
         status: 'pending',
       })
       .select()
       .single()
 
-    if (sessionError) {
-      setError(`Could not hold that time slot: ${sessionError.message}`)
+    if (paymentError) {
+      setError(`Could not save payment record: ${paymentError.message}`)
       setSubmitting(false)
       return
     }
 
-    const { error: participantError } = await supabase.from('session_participants').insert({
-      session_id: newSession.id,
+    // 3. Create one 1-hour pending session per selected slot, linked to this payment
+    const sessionRows = selectedSlots.map((slot) => ({
+      stage_id: stageId,
+      scheduled_start: slot.toISOString(),
+      scheduled_end: new Date(slot.getTime() + 60 * 60 * 1000).toISOString(),
+      status: 'pending',
+      payment_id: newPayment.id,
+    }))
+
+    const { data: newSessions, error: sessionError } = await supabase
+      .from('sessions')
+      .insert(sessionRows)
+      .select()
+
+    if (sessionError) {
+      setError(`Payment saved, but could not hold your slots: ${sessionError.message}`)
+      setSubmitting(false)
+      return
+    }
+
+    const participantRows = newSessions.map((s) => ({
+      session_id: s.id,
       student_id: userId,
-      hours_credited: Number(hoursCovered),
-    })
+      hours_credited: 1,
+    }))
+
+    const { error: participantError } = await supabase.from('session_participants').insert(participantRows)
 
     if (participantError) {
-      setError(`Could not link your schedule request: ${participantError.message}`)
-      setSubmitting(false)
-      return
-    }
-
-    // 3. Create the payment record, linked to that pending session —
-    // faculty approves both together.
-    const { error: insertError } = await supabase.from('payments').insert({
-      student_id: userId,
-      stage_id: stageId,
-      amount: Number(amount),
-      hours_covered: Number(hoursCovered),
-      receipt_url: filePath,
-      status: 'pending',
-      session_id: newSession.id,
-    })
-
-    if (insertError) {
-      setError(`Could not save payment record: ${insertError.message}`)
+      setError(`Slots held, but could not link them to your account: ${participantError.message}`)
       setSubmitting(false)
       return
     }
 
     setSuccessMsg(
-      'Receipt and schedule request submitted. Faculty will approve both together — your slot is held in the meantime.'
+      `Receipt and ${selectedSlots.length} slot(s) submitted. Faculty will approve the payment and schedule together — your slots are held in the meantime.`
     )
     setAmount('')
     setHoursCovered('')
     setFile(null)
-    setRequestedStart(null)
+    setSelectedSlots([])
     e.target.reset()
     await Promise.all([loadMyPayments(), loadCalendar()])
     setSubmitting(false)
@@ -218,93 +266,105 @@ export default function Payments({ session }) {
     <div className="main-content main-content-wide">
       <div className="page-heading">Payments</div>
       <div className="page-subheading">
-        Upload your receipt and pick your preferred simulator schedule. Faculty verifies
-        the payment and approves the schedule together — your slot is held while you wait.
+        Bookings are per 1-hour slot. Enter your paid hours below, then click that many
+        open slots on the calendar. Faculty approves the payment and every slot together.
       </div>
 
-      <Calendar
-        view={calView}
-        currentDate={calDate}
-        onViewChange={setCalView}
-        onDateChange={setCalDate}
-        events={calEvents}
-        onSlotClick={handleSlotClick}
-      />
+      <div className="payments-layout">
+        <Calendar
+          view={calView}
+          currentDate={calDate}
+          onViewChange={setCalView}
+          onDateChange={setCalDate}
+          events={displayEvents}
+          onSlotClick={handleSlotClick}
+        />
 
-      {error && <div className="auth-error">{error}</div>}
-      {successMsg && <div className="auth-success">{successMsg}</div>}
+        <form onSubmit={handleSubmit} className="payment-form">
+          {error && <div className="auth-error">{error}</div>}
+          {successMsg && <div className="auth-success">{successMsg}</div>}
 
-      <form onSubmit={handleSubmit} className="payment-form">
-        <div className="field">
-          <label htmlFor="stage">Stage</label>
-          <select id="stage" value={stageId} onChange={(e) => setStageId(e.target.value)} required>
-            <option value="">Select a stage…</option>
-            {stages.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
+          <div className="field">
+            <label htmlFor="stage">Stage</label>
+            <select id="stage" value={stageId} onChange={(e) => setStageId(e.target.value)} required>
+              <option value="">Select a stage…</option>
+              {stages.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <div className="field">
-          <label htmlFor="amount">Amount paid</label>
-          <input
-            id="amount"
-            type="number"
-            step="0.01"
-            min="0"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            required
-          />
-        </div>
+          <div className="field">
+            <label htmlFor="amount">Amount paid</label>
+            <input
+              id="amount"
+              type="number"
+              step="0.01"
+              min="0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              required
+            />
+          </div>
 
-        <div className="field">
-          <label htmlFor="hours">Hours this payment covers</label>
-          <input
-            id="hours"
-            type="number"
-            step="0.5"
-            min="0"
-            value={hoursCovered}
-            onChange={(e) => setHoursCovered(e.target.value)}
-            required
-          />
-        </div>
+          <div className="field">
+            <label htmlFor="hours">Hours this payment covers</label>
+            <input
+              id="hours"
+              type="number"
+              step="1"
+              min="1"
+              value={hoursCovered}
+              onChange={(e) => {
+                setHoursCovered(e.target.value)
+                setSelectedSlots([]) // changing hours invalidates prior slot picks
+              }}
+              required
+            />
+          </div>
 
-        <div className="field">
-          <label htmlFor="receipt">Receipt (image or PDF)</label>
-          <input
-            id="receipt"
-            type="file"
-            accept="image/*,application/pdf"
-            onChange={(e) => setFile(e.target.files[0])}
-            required
-          />
-        </div>
+          <div className="field">
+            <label htmlFor="receipt">Receipt (image or PDF)</label>
+            <input
+              id="receipt"
+              type="file"
+              accept="image/*,application/pdf"
+              onChange={(e) => setFile(e.target.files[0])}
+              required
+            />
+          </div>
 
-        <div className="field">
-          <label>Requested simulator schedule</label>
-          {requestedStart ? (
-            <div className="requested-slot">
-              {requestedStart.toLocaleString()}
-              {hoursCovered && requestedEndPreview() && (
-                <> – {requestedEndPreview().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</>
-              )}
-              <button type="button" className="link-btn" onClick={() => setRequestedStart(null)}>
-                Clear
-              </button>
-            </div>
-          ) : (
-            <p className="empty-text">Click an open slot on the calendar above to set this.</p>
-          )}
-        </div>
+          <div className="field">
+            <label>
+              Requested slots ({selectedSlots.length}/{requiredSlots || 0})
+            </label>
+            {selectedSlots.length === 0 ? (
+              <p className="empty-text">Click open 1-hour slots on the calendar.</p>
+            ) : (
+              <ul className="slot-list">
+                {selectedSlots.map((s, i) => (
+                  <li key={i}>
+                    {s.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                    <button
+                      type="button"
+                      className="link-btn"
+                      onClick={() => setSelectedSlots((prev) => prev.filter((_, idx) => idx !== i))}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-        <button className="btn-primary" type="submit" disabled={submitting}>
-          {submitting ? 'Submitting…' : 'Submit payment & schedule request'}
-        </button>
-      </form>
+          <button className="btn-primary" type="submit" disabled={submitting}>
+            {submitting ? 'Submitting…' : 'Submit payment & schedule request'}
+          </button>
+        </form>
+      </div>
 
       <div className="section-divider" />
 
@@ -320,7 +380,7 @@ export default function Payments({ session }) {
               <th>Stage</th>
               <th>Amount</th>
               <th>Hours</th>
-              <th>Requested schedule</th>
+              <th>Requested slots</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -331,8 +391,10 @@ export default function Payments({ session }) {
                 <td className="hours-figure">₱{p.amount}</td>
                 <td className="hours-figure">{p.hours_covered}</td>
                 <td>
-                  {p.sessions?.scheduled_start
-                    ? new Date(p.sessions.scheduled_start).toLocaleString()
+                  {p.sessions && p.sessions.length > 0
+                    ? p.sessions
+                        .map((s) => new Date(s.scheduled_start).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }))
+                        .join(', ')
                     : '—'}
                 </td>
                 <td>
