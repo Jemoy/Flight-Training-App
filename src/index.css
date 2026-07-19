@@ -348,3 +348,209 @@ a {
   color: var(--slate);
   font-size: 0.9rem;
 }
+
+/* ---------- Forms (payments / schedule) ---------- */
+
+.payment-form {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px;
+  max-width: 420px;
+}
+
+.payment-form select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+  background: #fff;
+}
+
+.payment-form .btn-primary {
+  width: auto;
+  padding: 10px 22px;
+}
+
+.auth-success {
+  background: #e9f7f1;
+  color: #1f6e52;
+  padding: 10px 12px;
+  border-radius: 7px;
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+}
+
+.section-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 36px 0 24px;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.simple-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.simple-table th,
+.simple-table td {
+  text-align: left;
+  padding: 10px 16px;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.simple-table th {
+  color: var(--slate);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.simple-table tr:last-child td {
+  border-bottom: none;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.status-pill.pending,
+.status-pill.scheduled {
+  background: #fdf1de;
+  color: #a06a1c;
+}
+
+.status-pill.verified,
+.status-pill.completed {
+  background: #e9f7f1;
+  color: #1f6e52;
+}
+
+.status-pill.rejected,
+.status-pill.cancelled,
+.status-pill.no_show {
+  background: #fbeaea;
+  color: #a12f2f;
+}
+
+/* ---------- Sidebar faculty section ---------- */
+
+.sidebar-divider {
+  margin-top: 8px;
+  padding: 0 12px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ---------- Row action buttons ---------- */
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--navy);
+  font-weight: 600;
+  font-size: 0.82rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.btn-approve,
+.btn-reject {
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-approve {
+  background: var(--teal);
+  color: #fff;
+}
+
+.btn-reject {
+  background: #fbeaea;
+  color: #a12f2f;
+}
+
+.btn-approve:disabled,
+.btn-reject:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---------- Evaluation cards ---------- */
+
+.eval-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.eval-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+
+.eval-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.eval-student {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.eval-meta {
+  color: var(--slate);
+  font-size: 0.82rem;
+  margin-top: 2px;
+}
+
+.eval-form {
+  margin-top: 14px;
+}
+
+.eval-form textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 10px 12px;
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  resize: vertical;
+  margin-bottom: 10px;
+}
