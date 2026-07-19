@@ -10,6 +10,7 @@ import FacultyPayments from './pages/FacultyPayments'
 import FacultyEvaluations from './pages/FacultyEvaluations'
 import AdminCreateStudent from './pages/AdminCreateStudent'
 import FullSchedule from './pages/FullSchedule'
+import FacultyDashboard from './pages/FacultyDashboard'
 import ProtectedRoute from './components/ProtectedRoute'
 import FacultyRoute from './components/FacultyRoute'
 
@@ -42,7 +43,7 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Dashboard session={session} />} />
+        <Route index element={<Home session={session} profile={profile} profileLoading={profileLoading} />} />
         <Route path="payments" element={<Payments session={session} />} />
         <Route path="schedule" element={<Schedule session={session} />} />
         <Route
@@ -82,6 +83,12 @@ export default function App() {
   )
 }
 
+function Home({ session, profile, profileLoading }) {
+  if (profileLoading) return null
+  const isFaculty = profile && ['faculty_personnel', 'admin'].includes(profile.role)
+  return isFaculty ? <FacultyDashboard profile={profile} /> : <Dashboard session={session} />
+}
+
 function Shell({ profile }) {
   const navigate = useNavigate()
   const isFaculty = profile && ['faculty_personnel', 'admin'].includes(profile.role)
@@ -100,8 +107,12 @@ function Shell({ profile }) {
         </div>
         <nav className="sidebar-nav">
           <Link to="/">Dashboard</Link>
-          <Link to="/payments">Payments</Link>
-          <Link to="/schedule">Schedule</Link>
+          {!isFaculty && (
+            <>
+              <Link to="/payments">Payments</Link>
+              <Link to="/schedule">Schedule</Link>
+            </>
+          )}
           {isFaculty && (
             <>
               <div className="sidebar-divider">Faculty</div>
