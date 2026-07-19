@@ -104,12 +104,17 @@ export default function Schedule({ session }) {
       seenSessionIds.add(s.id)
 
       const isMine = p.student_id === userId
+      const isPending = s.status === 'pending'
       sessionEvents.push({
         id: `session-${s.id}`,
         start: new Date(s.scheduled_start),
         end: new Date(s.scheduled_end),
-        title: isMine ? `You: ${s.stages?.name ?? 'Session'}` : 'Booked',
-        type: isMine ? 'mine' : 'booked',
+        title: isMine
+          ? `${isPending ? 'Pending: ' : 'You: '}${s.stages?.name ?? 'Session'}`
+          : isPending
+          ? 'Pending approval'
+          : 'Booked',
+        type: isMine ? (isPending ? 'pending' : 'mine') : isPending ? 'pending' : 'booked',
       })
     }
 

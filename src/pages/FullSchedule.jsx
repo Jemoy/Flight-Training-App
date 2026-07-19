@@ -40,7 +40,7 @@ export default function FullSchedule() {
           id: `session-${s.id}`,
           start: new Date(s.scheduled_start),
           end: new Date(s.scheduled_end),
-          title: s.stages?.name ?? 'Session',
+          title: `${s.stages?.name ?? 'Session'}${s.status === 'pending' ? ' (pending)' : ''}`,
           names: [],
           type: 'admin',
         }

@@ -84,6 +84,7 @@ export default function Calendar({ view, currentDate, onViewChange, onDateChange
 
       <div className="cal-legend">
         <span className="cal-legend-item"><i className="cal-dot mine" /> Your session</span>
+        <span className="cal-legend-item"><i className="cal-dot pending" /> Pending approval</span>
         <span className="cal-legend-item"><i className="cal-dot booked" /> Booked</span>
         <span className="cal-legend-item"><i className="cal-dot class" /> Your class</span>
       </div>

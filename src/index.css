@@ -544,6 +544,18 @@ a {
   margin-top: 14px;
 }
 
+.requested-slot {
+  background: var(--cloud);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .generate-pw-btn {
   display: block;
   margin-top: 6px;
@@ -753,6 +765,18 @@ a {
   color: #fff;
 }
 
+.cal-event-pending {
+  background: repeating-linear-gradient(
+    135deg,
+    #fdf1de,
+    #fdf1de 6px,
+    #f7e2bb 6px,
+    #f7e2bb 12px
+  );
+  color: #a06a1c;
+  border: 1px dashed #d99a2b;
+}
+
 .cal-event-booked {
   background: #e8a33d;
   color: #3a2a0c;
@@ -858,6 +882,10 @@ a {
 
 .cal-dot.mine {
   background: #2f9e7a;
+}
+
+.cal-dot.pending {
+  background: #d99a2b;
 }
 
 .cal-dot.booked {

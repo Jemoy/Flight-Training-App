@@ -16,7 +16,9 @@ export default function FacultyPayments({ session }) {
     setError('')
     const { data, error } = await supabase
       .from('payments')
-      .select('id, amount, hours_covered, receipt_url, status, submitted_at, student_id, stage_id, profiles(full_name), stages(name)')
+      .select(
+        'id, amount, hours_covered, receipt_url, status, submitted_at, student_id, stage_id, session_id, profiles(full_name), stages(name), sessions(scheduled_start, scheduled_end, status)'
+      )
       .eq('status', 'pending')
       .order('submitted_at', { ascending: true })
 
@@ -40,8 +42,8 @@ export default function FacultyPayments({ session }) {
     window.open(data.signedUrl, '_blank')
   }
 
-  async function handleApprove(paymentId) {
-    setBusyId(paymentId)
+  async function handleApprove(payment) {
+    setBusyId(payment.id)
     const { error } = await supabase
       .from('payments')
       .update({
@@ -49,21 +51,37 @@ export default function FacultyPayments({ session }) {
         verified_by: session.user.id,
         verified_at: new Date().toISOString(),
       })
-      .eq('id', paymentId)
+      .eq('id', payment.id)
 
     if (error) {
       setError(error.message)
-    } else {
-      await loadPending()
+      setBusyId(null)
+      return
     }
+
+    // Confirm the tentative session hold that came with this payment, if any
+    if (payment.session_id) {
+      const { error: sessionErr } = await supabase
+        .from('sessions')
+        .update({ status: 'scheduled' })
+        .eq('id', payment.session_id)
+
+      if (sessionErr) {
+        setError(`Payment verified, but could not confirm the schedule: ${sessionErr.message}`)
+        setBusyId(null)
+        return
+      }
+    }
+
+    await loadPending()
     setBusyId(null)
   }
 
-  async function handleReject(paymentId) {
+  async function handleReject(payment) {
     const reason = window.prompt('Reason for rejecting this receipt?')
     if (reason === null) return // cancelled
 
-    setBusyId(paymentId)
+    setBusyId(payment.id)
     const { error } = await supabase
       .from('payments')
       .update({
@@ -72,13 +90,29 @@ export default function FacultyPayments({ session }) {
         verified_by: session.user.id,
         verified_at: new Date().toISOString(),
       })
-      .eq('id', paymentId)
+      .eq('id', payment.id)
 
     if (error) {
       setError(error.message)
-    } else {
-      await loadPending()
+      setBusyId(null)
+      return
     }
+
+    // Free up the calendar hold since the payment behind it wasn't approved
+    if (payment.session_id) {
+      const { error: sessionErr } = await supabase
+        .from('sessions')
+        .update({ status: 'cancelled' })
+        .eq('id', payment.session_id)
+
+      if (sessionErr) {
+        setError(`Payment rejected, but could not release the held slot: ${sessionErr.message}`)
+        setBusyId(null)
+        return
+      }
+    }
+
+    await loadPending()
     setBusyId(null)
   }
 
@@ -104,6 +138,7 @@ export default function FacultyPayments({ session }) {
               <th>Amount</th>
               <th>Hours</th>
               <th>Receipt</th>
+              <th>Requested schedule</th>
               <th>Submitted</th>
               <th></th>
             </tr>
@@ -120,19 +155,24 @@ export default function FacultyPayments({ session }) {
                     View
                   </button>
                 </td>
+                <td>
+                  {p.sessions?.scheduled_start
+                    ? new Date(p.sessions.scheduled_start).toLocaleString()
+                    : '—'}
+                </td>
                 <td>{new Date(p.submitted_at).toLocaleDateString()}</td>
                 <td className="row-actions">
                   <button
                     className="btn-approve"
                     disabled={busyId === p.id}
-                    onClick={() => handleApprove(p.id)}
+                    onClick={() => handleApprove(p)}
                   >
                     Approve
                   </button>
                   <button
                     className="btn-reject"
                     disabled={busyId === p.id}
-                    onClick={() => handleReject(p.id)}
+                    onClick={() => handleReject(p)}
                   >
                     Reject
                   </button>
