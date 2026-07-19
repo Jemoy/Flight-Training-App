@@ -544,6 +544,11 @@ a {
   margin-top: 14px;
 }
 
+.generate-pw-btn {
+  display: block;
+  margin-top: 6px;
+}
+
 .eval-form textarea {
   width: 100%;
   border: 1px solid var(--border);

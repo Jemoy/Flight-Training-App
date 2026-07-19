@@ -8,6 +8,7 @@ import Payments from './pages/Payments'
 import Schedule from './pages/Schedule'
 import FacultyPayments from './pages/FacultyPayments'
 import FacultyEvaluations from './pages/FacultyEvaluations'
+import AdminCreateStudent from './pages/AdminCreateStudent'
 import ProtectedRoute from './components/ProtectedRoute'
 import FacultyRoute from './components/FacultyRoute'
 
@@ -59,6 +60,14 @@ export default function App() {
             </FacultyRoute>
           }
         />
+        <Route
+          path="admin/create-student"
+          element={
+            <FacultyRoute profile={profile} loading={profileLoading} roles={['admin']}>
+              <AdminCreateStudent />
+            </FacultyRoute>
+          }
+        />
       </Route>
     </Routes>
   )
@@ -67,6 +76,7 @@ export default function App() {
 function Shell({ profile }) {
   const navigate = useNavigate()
   const isFaculty = profile && ['faculty_personnel', 'admin'].includes(profile.role)
+  const isAdmin = profile?.role === 'admin'
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -88,6 +98,12 @@ function Shell({ profile }) {
               <div className="sidebar-divider">Faculty</div>
               <Link to="/faculty/payments">Verify payments</Link>
               <Link to="/faculty/evaluations">Evaluations</Link>
+            </>
+          )}
+          {isAdmin && (
+            <>
+              <div className="sidebar-divider">Admin</div>
+              <Link to="/admin/create-student">Create student</Link>
             </>
           )}
           <button onClick={handleSignOut}>Sign out</button>
