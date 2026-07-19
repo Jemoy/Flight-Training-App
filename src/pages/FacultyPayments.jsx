@@ -17,7 +17,7 @@ export default function FacultyPayments({ session }) {
     const { data, error } = await supabase
       .from('payments')
       .select(
-        'id, amount, hours_covered, receipt_url, status, submitted_at, student_id, stage_id, profiles(full_name), stages(name), sessions(id, scheduled_start, scheduled_end, status)'
+        'id, amount, hours_covered, receipt_url, status, submitted_at, student_id, stage_id, profiles!payments_student_id_fkey(full_name), stages(name), sessions(id, scheduled_start, scheduled_end, status)'
       )
       .eq('status', 'pending')
       .order('submitted_at', { ascending: true })
