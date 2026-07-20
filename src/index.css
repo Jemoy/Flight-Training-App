@@ -71,7 +71,8 @@ a {
 }
 
 .sidebar-nav a,
-.sidebar-nav button {
+.sidebar-nav button,
+.sidebar-footer button {
   background: none;
   border: none;
   text-align: left;
@@ -84,7 +85,8 @@ a {
 }
 
 .sidebar-nav a:hover,
-.sidebar-nav button:hover {
+.sidebar-nav button:hover,
+.sidebar-footer button:hover {
   background: var(--navy-light);
   color: #fff;
 }
@@ -991,6 +993,13 @@ a {
   color: var(--navy);
 }
 
+.ds-resource {
+  width: 100px;
+  text-align: center;
+  font-size: 0.76rem;
+  color: var(--slate);
+}
+
 .ds-hours {
   width: 34px;
   text-align: center;
@@ -1004,6 +1013,127 @@ a {
   gap: 20px;
   flex-wrap: wrap;
   margin-bottom: 18px;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar-profile-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+
+.sidebar-profile-link:hover {
+  opacity: 0.85;
+}
+
+.sidebar-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sidebar-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sidebar-avatar-placeholder {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.sidebar-profile-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.avatar-section {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.avatar-preview {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--cloud);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-placeholder {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--slate);
+}
+
+.avatar-upload-btn {
+  display: inline-block;
+  width: auto;
+  cursor: pointer;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 10px 18px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--slate);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tab-btn.active {
+  color: var(--navy);
+  border-bottom-color: var(--amber);
+}
+
+.tab-btn:hover:not(.active) {
+  color: var(--navy);
 }
 
 .logbook-header {

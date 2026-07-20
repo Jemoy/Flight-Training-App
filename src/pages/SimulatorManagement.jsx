@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { TRACK_LABELS } from '../lib/stageStatus'
 
 const SIM_TYPE_OPTIONS = [
   { value: 'basic_simulator', label: 'Basic Simulator' },
   { value: 'atd', label: 'ATD' },
   { value: 'aatd', label: 'AATD' },
+  { value: 'va', label: 'VA' },
 ]
 
 function typeLabels(values) {
@@ -38,8 +40,9 @@ export default function SimulatorManagement() {
   async function loadMatrix() {
     const { data: stageRows } = await supabase
       .from('stages')
-      .select('id, name, sequence_order')
-      .eq('track', 'simulator')
+      .select('id, name, track, sequence_order')
+      .eq('requires_simulator', true)
+      .order('track', { ascending: true })
       .order('sequence_order', { ascending: true })
     setStages(stageRows ?? [])
 
@@ -272,7 +275,7 @@ export default function SimulatorManagement() {
           <tbody>
             {stages.map((stage) => (
               <tr key={stage.id}>
-                <td>{stage.name}</td>
+                <td>{stage.name} <span className="status-placeholder">({TRACK_LABELS[stage.track] ?? stage.track})</span></td>
                 {simulators.map((sim) => (
                   <td key={sim.id} className="matrix-checkbox-cell">
                     <input

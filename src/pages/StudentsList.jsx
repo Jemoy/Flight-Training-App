@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import ClassSchedulePanel from '../components/ClassSchedulePanel'
 import BackfillPanel from '../components/BackfillPanel'
+import { computeStageStatuses } from '../lib/stageStatus'
 
 export default function StudentsList({ profile, session }) {
   const [students, setStudents] = useState([])
@@ -74,9 +75,13 @@ export default function StudentsList({ profile, session }) {
 
     const { data: stages } = await supabase
       .from('stages')
-      .select('id, name, sequence_order, required_hours')
+      .select('id, name, track, sequence_order, required_hours')
       .eq('track', 'simulator')
       .order('sequence_order', { ascending: true })
+
+    const { data: prereqs } = await supabase
+      .from('stage_prerequisites')
+      .select('stage_id, prerequisite_stage_id')
 
     const { data: progress } = await supabase
       .from('student_stage_progress')
@@ -94,19 +99,13 @@ export default function StudentsList({ profile, session }) {
 
     const progressByStudent = {}
     for (const p of progress ?? []) {
-      if (!progressByStudent[p.student_id]) progressByStudent[p.student_id] = {}
-      progressByStudent[p.student_id][p.stage_id] = p
+      if (!progressByStudent[p.student_id]) progressByStudent[p.student_id] = []
+      progressByStudent[p.student_id].push(p)
     }
 
     const roster = (profiles ?? []).map((student) => {
-      const studentProgress = progressByStudent[student.id] ?? {}
-      const merged = (stages ?? []).map((stage, i) => {
-        const p = studentProgress[stage.id]
-        return {
-          ...stage,
-          status: p?.status ?? (i === 0 ? 'in_progress' : 'locked'),
-        }
-      })
+      const studentProgress = progressByStudent[student.id] ?? []
+      const merged = computeStageStatuses(stages, studentProgress, prereqs)
 
       const allComplete = merged.length > 0 && merged.every((s) => s.status === 'complete')
       const currentStage = merged.find((s) => s.status === 'in_progress' || s.status === 'pending_approval')
@@ -115,10 +114,10 @@ export default function StudentsList({ profile, session }) {
       return {
         ...student,
         currentStageLabel: allComplete
-          ? 'All stages complete'
+          ? 'FS: All stages complete'
           : currentStage?.status === 'pending_approval'
-          ? `${currentStage.name} (pending approval)`
-          : currentStage?.name ?? 'Not started',
+          ? `FS: ${currentStage.name} (pending approval)`
+          : `FS: ${currentStage?.name ?? 'Not started'}`,
         latestEval,
       }
     })

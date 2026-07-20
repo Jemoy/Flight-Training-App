@@ -2,9 +2,13 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import Calendar from '../components/Calendar'
 import { getSimulatorsForStage } from '../lib/stageSimulators'
+import { computeStageStatuses, TRACK_LABELS } from '../lib/stageStatus'
+
+const BOOKABLE_TRACKS = ['simulator', 'ppl', 'cpl', 'ir', 'multi_engine']
 
 export default function Payments({ session }) {
   const [stages, setStages] = useState([])
+  const [trackId, setTrackId] = useState('simulator')
   const [stageId, setStageId] = useState('')
   const [amount, setAmount] = useState('')
   const [hoursCovered, setHoursCovered] = useState('')
@@ -39,23 +43,30 @@ export default function Payments({ session }) {
       return
     }
     setSimulatorFilter('')
-    getSimulatorsForStage(stageId).then(setStageSimulators)
+    getSimulatorsForStage(stageId).then((sims) => {
+      setStageSimulators(sims)
+      setSimulatorFilter(sims[0]?.id ?? '')
+    })
   }, [stageId])
 
   function compatibleSimulatorCount() {
+    // Real-flying stages aren't resource-constrained by the simulator fleet —
+    // there's no aircraft-availability model yet, so don't block on it.
+    if (selectedStage && selectedStage.requires_simulator === false) return 999
     // Explicit admin-assigned mapping — a stage with nothing configured yet
     // has zero valid simulators, so booking is correctly blocked until set up.
     return stageSimulators.length
   }
 
   async function loadStages() {
-    const { data, error } = await supabase
-      .from('stages')
-      .select('id, name, code, instrument_type')
-      .eq('track', 'simulator')
-      .order('sequence_order', { ascending: true })
+    const userId = session.user.id
+    const [{ data: allStages, error }, { data: prereqs }, { data: progressRows }] = await Promise.all([
+      supabase.from('stages').select('id, name, code, instrument_type, track, sequence_order, requires_simulator'),
+      supabase.from('stage_prerequisites').select('stage_id, prerequisite_stage_id'),
+      supabase.from('student_stage_progress').select('stage_id, status, cumulative_hours').eq('student_id', userId),
+    ])
 
-    if (!error) setStages(data ?? [])
+    if (!error) setStages(computeStageStatuses(allStages, progressRows, prereqs))
   }
 
   async function loadMyPayments() {
@@ -161,13 +172,12 @@ export default function Payments({ session }) {
     setSelectedSlots((prev) => [...prev, slotStart].sort((a, b) => a - b))
   }
 
-  // When viewing a specific simulator, only show confirmed bookings on that
-  // exact unit (plus the student's own stuff and classes, always). Pending
-  // requests aren't shown per-simulator since none has been assigned yet.
+  // When viewing a specific simulator, show only sessions actually on that
+  // exact unit — class schedule is unrelated to simulators so always shows.
+  // Pending requests (no simulator assigned yet) don't show under a specific
+  // simulator, including the student's own — same reasoning as anyone else's.
   const simulatorFilteredEvents = simulatorFilter
-    ? calEvents.filter(
-        (e) => e.type === 'class' || e.isMine || (e.type === 'booked' && e.simulatorId === simulatorFilter)
-      )
+    ? calEvents.filter((e) => e.type === 'class' || e.simulatorId === simulatorFilter)
     : calEvents
 
   // Overlay the student's in-progress selections on the calendar as "mine" so
@@ -239,6 +249,7 @@ export default function Payments({ session }) {
         hours_covered: Number(hoursCovered),
         receipt_url: filePath,
         status: 'pending',
+        preferred_simulator_id: simulatorFilter || null,
       })
       .select()
       .single()
@@ -307,19 +318,23 @@ export default function Payments({ session }) {
         <div>
           {stageSimulators.length > 0 && (
             <div className="field" style={{ maxWidth: 320, marginBottom: 12 }}>
-              <label htmlFor="simFilter">View simulator schedule</label>
+              <label htmlFor="simFilter">Preferred simulator</label>
               <select
                 id="simFilter"
                 value={simulatorFilter}
                 onChange={(e) => setSimulatorFilter(e.target.value)}
+                required
               >
-                <option value="">All simulators (combined availability)</option>
                 {stageSimulators.map((sim) => (
                   <option key={sim.id} value={sim.id}>
-                    {sim.name} Schedule
+                    {sim.name}
                   </option>
                 ))}
               </select>
+              <p className="empty-text" style={{ marginTop: 6 }}>
+                Also filters the calendar to that simulator's schedule. Faculty sees this
+                as your preference when approving, and can assign a different one if needed.
+              </p>
             </div>
           )}
 
@@ -338,23 +353,57 @@ export default function Payments({ session }) {
           {successMsg && <div className="auth-success">{successMsg}</div>}
 
           <div className="field">
-            <label htmlFor="stage">Stage</label>
-            <select id="stage" value={stageId} onChange={(e) => setStageId(e.target.value)} required>
-              <option value="">Select a stage…</option>
-              {stages.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
+            <label htmlFor="track">Track</label>
+            <select
+              id="track"
+              value={trackId}
+              onChange={(e) => {
+                setTrackId(e.target.value)
+                setStageId('')
+              }}
+              required
+            >
+              {BOOKABLE_TRACKS.map((t) => (
+                <option key={t} value={t}>
+                  {TRACK_LABELS[t]}
                 </option>
               ))}
             </select>
-            {stageId && stageSimulators.length === 0 && (
+          </div>
+
+          <div className="field">
+            <label htmlFor="stage">Stage</label>
+            <select id="stage" value={stageId} onChange={(e) => setStageId(e.target.value)} required>
+              <option value="">Select a stage…</option>
+              {stages
+                .filter((s) => s.track === trackId && (s.status === 'in_progress' || s.status === 'pending_approval'))
+                .sort((a, b) => a.sequence_order - b.sequence_order)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+            </select>
+            {trackId &&
+              stages.filter((s) => s.track === trackId && (s.status === 'in_progress' || s.status === 'pending_approval'))
+                .length === 0 && (
+                <p className="empty-text" style={{ marginTop: 8 }}>
+                  No unlocked stages in this track yet.
+                </p>
+              )}
+            {stageId && selectedStage?.requires_simulator !== false && stageSimulators.length === 0 && (
               <p className="auth-error" style={{ marginTop: 8 }}>
                 No simulators are assigned to this stage yet — contact the office before booking.
               </p>
             )}
-            {stageId && stageSimulators.length > 0 && (
+            {stageId && selectedStage?.requires_simulator !== false && stageSimulators.length > 0 && (
               <p className="empty-text" style={{ marginTop: 8 }}>
                 Uses: {stageSimulators.map((s) => s.name).join(', ')}
+              </p>
+            )}
+            {stageId && selectedStage?.requires_simulator === false && (
+              <p className="empty-text" style={{ marginTop: 8 }}>
+                This is an actual flight, not a simulator session — no simulator needed.
               </p>
             )}
           </div>

@@ -163,6 +163,18 @@ export default function FacultyEvaluations({ session, profile }) {
     setSubmitting(true)
     setError('')
 
+    const { error: hoursErr } = await supabase
+      .from('session_participants')
+      .update({ hours_credited: hoursValue })
+      .eq('session_id', participant.session_id)
+      .eq('student_id', participant.student_id)
+
+    if (hoursErr) {
+      setError(hoursErr.message)
+      setSubmitting(false)
+      return
+    }
+
     const { error: sessionErr } = await supabase
       .from('sessions')
       .update({
@@ -177,18 +189,6 @@ export default function FacultyEvaluations({ session, profile }) {
 
     if (sessionErr) {
       setError(sessionErr.message)
-      setSubmitting(false)
-      return
-    }
-
-    const { error: hoursErr } = await supabase
-      .from('session_participants')
-      .update({ hours_credited: hoursValue })
-      .eq('session_id', participant.session_id)
-      .eq('student_id', participant.student_id)
-
-    if (hoursErr) {
-      setError(hoursErr.message)
       setSubmitting(false)
       return
     }

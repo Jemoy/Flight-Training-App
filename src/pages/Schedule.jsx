@@ -32,7 +32,6 @@ export default function Schedule({ session }) {
     const { data: stages } = await supabase
       .from('stages')
       .select('id, name')
-      .eq('track', 'simulator')
 
     const { data: payments } = await supabase
       .from('payments')
@@ -215,7 +214,7 @@ export default function Schedule({ session }) {
 
   return (
     <div className="main-content main-content-wide">
-      <div className="page-heading">Schedule a simulator session</div>
+      <div className="page-heading">Schedule a session</div>
       <div className="page-subheading">
         Click an open slot on the calendar to fill in the booking form, or enter a time
         manually. Your classes and existing bookings are shown so you can avoid conflicts.

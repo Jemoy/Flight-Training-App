@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { getSimulatorsForStage } from '../lib/stageSimulators'
+import { aircraftMaintenanceStatus, aircraftOptionLabel } from '../lib/aircraftStatus'
 
 export default function FacultyPayments({ session }) {
   const [payments, setPayments] = useState([])
@@ -11,12 +12,24 @@ export default function FacultyPayments({ session }) {
   const [stageSimulatorsByStage, setStageSimulatorsByStage] = useState({})
   const [assignedInstructor, setAssignedInstructor] = useState({}) // paymentId -> instructorId
   const [assignedSimulator, setAssignedSimulator] = useState({}) // paymentId -> simulatorId
+  const [aircraftList, setAircraftList] = useState([])
+  const [assignedAircraft, setAssignedAircraft] = useState({}) // paymentId -> aircraftId
 
   useEffect(() => {
     loadPending()
     loadFaculty()
     loadStageSimulators()
+    loadAircraft()
   }, [])
+
+  async function loadAircraft() {
+    const { data } = await supabase
+      .from('aircraft')
+      .select('id, aircraft_type, registry, hours_before_50hr_maintenance, hours_before_100hr_maintenance')
+      .eq('is_active', true)
+      .order('registry', { ascending: true })
+    setAircraftList(data ?? [])
+  }
 
   async function loadFaculty() {
     const { data } = await supabase
@@ -47,7 +60,7 @@ export default function FacultyPayments({ session }) {
     const { data, error } = await supabase
       .from('payments')
       .select(
-        'id, amount, hours_covered, receipt_url, status, submitted_at, student_id, stage_id, profiles!payments_student_id_fkey(full_name, student_number), stages(name, instrument_type), sessions!sessions_payment_id_fkey(id, scheduled_start, scheduled_end, status)'
+        'id, amount, hours_covered, receipt_url, status, submitted_at, student_id, stage_id, preferred_simulator_id, profiles!payments_student_id_fkey(full_name, student_number), stages(name, instrument_type, requires_simulator), sessions!sessions_payment_id_fkey(id, scheduled_start, scheduled_end, status)'
       )
       .eq('status', 'pending')
       .order('submitted_at', { ascending: true })
@@ -56,6 +69,15 @@ export default function FacultyPayments({ session }) {
       setError(error.message)
     } else {
       setPayments(data ?? [])
+      setAssignedSimulator((prev) => {
+        const next = { ...prev }
+        for (const p of data ?? []) {
+          if (p.preferred_simulator_id && !(p.id in next)) {
+            next[p.id] = p.preferred_simulator_id
+          }
+        }
+        return next
+      })
     }
     setLoading(false)
   }
@@ -75,15 +97,33 @@ export default function FacultyPayments({ session }) {
   async function handleApprove(payment) {
     setError('')
     const instructorId = assignedInstructor[payment.id]
-    const simulatorId = assignedSimulator[payment.id]
+    const needsSimulator = payment.stages?.requires_simulator !== false
+    const needsAircraft = payment.stages?.requires_simulator === false
+    const simulatorId = needsSimulator ? assignedSimulator[payment.id] : null
+    const aircraftId = needsAircraft ? assignedAircraft[payment.id] : null
 
     if (!instructorId) {
       setError('Select a faculty member to assign before approving.')
       return
     }
-    if (!simulatorId) {
+    if (needsSimulator && !simulatorId) {
       setError('Select a simulator to assign before approving.')
       return
+    }
+    if (needsAircraft && !aircraftId) {
+      setError('Select an aircraft to assign before approving.')
+      return
+    }
+
+    if (needsAircraft) {
+      const chosenAircraft = aircraftList.find((a) => a.id === aircraftId)
+      const maintStatus = aircraftMaintenanceStatus(chosenAircraft)
+      if (maintStatus === 'due') {
+        const proceed = window.confirm(
+          `${chosenAircraft.aircraft_type} — ${chosenAircraft.registry} is due for maintenance. Approve anyway?`
+        )
+        if (!proceed) return
+      }
     }
 
     const sessionsToConfirm = payment.sessions ?? []
@@ -91,25 +131,52 @@ export default function FacultyPayments({ session }) {
     // Check the chosen simulator isn't already booked by someone else at
     // any of these times — now that multiple simulators can run in parallel,
     // this is the one place double-booking actually gets prevented.
-    for (const s of sessionsToConfirm) {
-      const { data: conflicts, error: conflictErr } = await supabase
-        .from('sessions')
-        .select('id, scheduled_start, scheduled_end')
-        .eq('simulator_id', simulatorId)
-        .eq('status', 'scheduled')
-        .neq('id', s.id)
-        .lt('scheduled_start', s.scheduled_end)
-        .gt('scheduled_end', s.scheduled_start)
+    if (needsSimulator) {
+      for (const s of sessionsToConfirm) {
+        const { data: conflicts, error: conflictErr } = await supabase
+          .from('sessions')
+          .select('id, scheduled_start, scheduled_end')
+          .eq('simulator_id', simulatorId)
+          .eq('status', 'scheduled')
+          .neq('id', s.id)
+          .lt('scheduled_start', s.scheduled_end)
+          .gt('scheduled_end', s.scheduled_start)
 
-      if (conflictErr) {
-        setError(`Could not check simulator availability: ${conflictErr.message}`)
-        return
+        if (conflictErr) {
+          setError(`Could not check simulator availability: ${conflictErr.message}`)
+          return
+        }
+        if (conflicts && conflicts.length > 0) {
+          setError(
+            `That simulator is already booked at ${new Date(s.scheduled_start).toLocaleString()}. Choose a different simulator or reject this request.`
+          )
+          return
+        }
       }
-      if (conflicts && conflicts.length > 0) {
-        setError(
-          `That simulator is already booked at ${new Date(s.scheduled_start).toLocaleString()}. Choose a different simulator or reject this request.`
-        )
-        return
+    }
+
+    // Same check for aircraft — one aircraft can't be in two places at once.
+    if (needsAircraft) {
+      for (const s of sessionsToConfirm) {
+        const { data: conflicts, error: conflictErr } = await supabase
+          .from('sessions')
+          .select('id, scheduled_start, scheduled_end')
+          .eq('aircraft_id', aircraftId)
+          .eq('status', 'scheduled')
+          .neq('id', s.id)
+          .lt('scheduled_start', s.scheduled_end)
+          .gt('scheduled_end', s.scheduled_start)
+
+        if (conflictErr) {
+          setError(`Could not check aircraft availability: ${conflictErr.message}`)
+          return
+        }
+        if (conflicts && conflicts.length > 0) {
+          setError(
+            `That aircraft is already booked at ${new Date(s.scheduled_start).toLocaleString()}. Choose a different aircraft or reject this request.`
+          )
+          return
+        }
       }
     }
 
@@ -133,7 +200,7 @@ export default function FacultyPayments({ session }) {
     if (sessionIds.length > 0) {
       const { error: sessionErr } = await supabase
         .from('sessions')
-        .update({ status: 'scheduled', instructor_id: instructorId, simulator_id: simulatorId })
+        .update({ status: 'scheduled', instructor_id: instructorId, simulator_id: simulatorId, aircraft_id: aircraftId })
         .in('id', sessionIds)
 
       if (sessionErr) {
@@ -211,7 +278,7 @@ export default function FacultyPayments({ session }) {
               <th>Receipt</th>
               <th>Requested schedule</th>
               <th>Faculty assigned</th>
-              <th>Simulator</th>
+              <th>Resource</th>
               <th>Submitted</th>
               <th></th>
             </tr>
@@ -260,20 +327,57 @@ export default function FacultyPayments({ session }) {
                     </select>
                   </td>
                   <td>
-                    <select
-                      className="inline-select"
-                      value={assignedSimulator[p.id] ?? ''}
-                      onChange={(e) =>
-                        setAssignedSimulator((prev) => ({ ...prev, [p.id]: e.target.value }))
-                      }
-                    >
-                      <option value="">Select simulator…</option>
-                      {options.map((sim) => (
-                        <option key={sim.id} value={sim.id}>
-                          {sim.name}
-                        </option>
-                      ))}
-                    </select>
+                    {p.stages?.requires_simulator === false ? (
+                      <>
+                        <select
+                          className="inline-select"
+                          value={assignedAircraft[p.id] ?? ''}
+                          onChange={(e) =>
+                            setAssignedAircraft((prev) => ({ ...prev, [p.id]: e.target.value }))
+                          }
+                        >
+                          <option value="">Select aircraft…</option>
+                          {aircraftList.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {aircraftOptionLabel(a)}
+                            </option>
+                          ))}
+                        </select>
+                        {assignedAircraft[p.id] &&
+                          aircraftMaintenanceStatus(aircraftList.find((a) => a.id === assignedAircraft[p.id])) !==
+                            'ok' && (
+                            <div className="auth-error" style={{ marginTop: 4, fontSize: '0.78rem' }}>
+                              {aircraftMaintenanceStatus(aircraftList.find((a) => a.id === assignedAircraft[p.id])) ===
+                              'due'
+                                ? 'This aircraft is due for maintenance.'
+                                : 'This aircraft is close to needing maintenance.'}
+                            </div>
+                          )}
+                      </>
+                    ) : (
+                      <>
+                        <select
+                          className="inline-select"
+                          value={assignedSimulator[p.id] ?? ''}
+                          onChange={(e) =>
+                            setAssignedSimulator((prev) => ({ ...prev, [p.id]: e.target.value }))
+                          }
+                        >
+                          <option value="">Select simulator…</option>
+                          {options.map((sim) => (
+                            <option key={sim.id} value={sim.id}>
+                              {sim.name}
+                            </option>
+                          ))}
+                        </select>
+                        {p.preferred_simulator_id && (
+                          <div className="empty-text" style={{ marginTop: 4, fontSize: '0.72rem' }}>
+                            Student preferred:{' '}
+                            {options.find((o) => o.id === p.preferred_simulator_id)?.name ?? 'Unknown'}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </td>
                   <td>{new Date(p.submitted_at).toLocaleDateString()}</td>
                   <td className="row-actions">

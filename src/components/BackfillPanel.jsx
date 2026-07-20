@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import LogEntryFields, { emptyLogEntry } from './LogEntryFields'
+import { TRACK_LABELS } from '../lib/stageStatus'
+import { aircraftOptionLabel } from '../lib/aircraftStatus'
+
+const ALL_TRACKS = ['simulator', 'ppl', 'cpl', 'ir', 'multi_engine']
 
 export default function BackfillPanel({ studentId, currentUserId }) {
   const [stages, setStages] = useState([])
+  const [trackId, setTrackId] = useState('simulator')
   const [routes, setRoutes] = useState([])
   const [faculty, setFaculty] = useState([])
+  const [aircraftList, setAircraftList] = useState([])
+  const [aircraftId, setAircraftId] = useState('')
   const [instructorId, setInstructorId] = useState('')
   const [stageId, setStageId] = useState('')
   const [date, setDate] = useState('')
@@ -16,11 +23,13 @@ export default function BackfillPanel({ studentId, currentUserId }) {
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
 
+  const selectedStage = stages.find((s) => s.id === stageId)
+  const needsAircraft = selectedStage?.requires_simulator === false
+
   useEffect(() => {
     supabase
       .from('stages')
-      .select('id, name')
-      .eq('track', 'simulator')
+      .select('id, name, track, sequence_order, requires_simulator')
       .order('sequence_order', { ascending: true })
       .then(({ data }) => setStages(data ?? []))
 
@@ -36,6 +45,13 @@ export default function BackfillPanel({ studentId, currentUserId }) {
       .eq('role', 'faculty_personnel')
       .order('full_name', { ascending: true })
       .then(({ data }) => setFaculty(data ?? []))
+
+    supabase
+      .from('aircraft')
+      .select('id, aircraft_type, registry, hours_before_50hr_maintenance, hours_before_100hr_maintenance')
+      .eq('is_active', true)
+      .order('registry', { ascending: true })
+      .then(({ data }) => setAircraftList(data ?? []))
   }, [])
 
   function updateLog(field, value) {
@@ -60,6 +76,10 @@ export default function BackfillPanel({ studentId, currentUserId }) {
       setError('Fill in Type, Route From, and Route To.')
       return
     }
+    if (needsAircraft && !aircraftId) {
+      setError('Select which aircraft was used.')
+      return
+    }
     if (!hoursValue || hoursValue <= 0) {
       setError('Enter a valid number of hours.')
       return
@@ -70,15 +90,17 @@ export default function BackfillPanel({ studentId, currentUserId }) {
     const start = new Date(`${date}T09:00`)
     const end = new Date(start.getTime() + hoursValue * 60 * 60 * 1000)
 
-    // A completed session dated in the past, with no payment attached and this
-    // admin as instructor-of-record — satisfies the same evaluation rules as live data.
+    // Create the session as 'pending' first, log the hours, THEN flip to
+    // 'completed' — this ordering matters: the aircraft-hours trigger reads
+    // session_participants at the moment status becomes 'completed', so the
+    // hours row must already exist by then.
     const { data: newSession, error: sessionErr } = await supabase
       .from('sessions')
       .insert({
         stage_id: stageId,
         scheduled_start: start.toISOString(),
         scheduled_end: end.toISOString(),
-        status: 'completed',
+        status: 'pending',
         instructor_id: instructorId,
         aircraft_type: logEntry.aircraftType.trim(),
         route_from: logEntry.routeFrom,
@@ -107,6 +129,17 @@ export default function BackfillPanel({ studentId, currentUserId }) {
       return
     }
 
+    const { error: completeErr } = await supabase
+      .from('sessions')
+      .update({ status: 'completed', aircraft_id: needsAircraft ? aircraftId : null })
+      .eq('id', newSession.id)
+
+    if (completeErr) {
+      setError(`Hours logged, but could not finalize the session: ${completeErr.message}`)
+      setSubmitting(false)
+      return
+    }
+
     const { error: evalErr } = await supabase.from('evaluations').insert({
       session_id: newSession.id,
       student_id: studentId,
@@ -125,6 +158,7 @@ export default function BackfillPanel({ studentId, currentUserId }) {
     setSuccessMsg(`Backfilled ${hoursValue} hour(s).`)
     setStageId('')
     setInstructorId('')
+    setAircraftId('')
     setDate('')
     setNotes('')
     setResult('pass')
@@ -140,14 +174,33 @@ export default function BackfillPanel({ studentId, currentUserId }) {
       <form onSubmit={handleSubmit} className="backfill-form">
         <div className="backfill-form-row">
           <div className="field">
+            <label>Track</label>
+            <select
+              value={trackId}
+              onChange={(e) => {
+                setTrackId(e.target.value)
+                setStageId('')
+              }}
+              required
+            >
+              {ALL_TRACKS.map((t) => (
+                <option key={t} value={t}>
+                  {TRACK_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
             <label>Stage</label>
             <select value={stageId} onChange={(e) => setStageId(e.target.value)} required>
               <option value="">Select a stage…</option>
-              {stages.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
+              {stages
+                .filter((s) => s.track === trackId)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
             </select>
           </div>
           <div className="field">
@@ -161,10 +214,26 @@ export default function BackfillPanel({ studentId, currentUserId }) {
               ))}
             </select>
           </div>
+        </div>
+
+        <div className="backfill-form-row">
           <div className="field">
             <label>Date completed</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
           </div>
+          {needsAircraft && (
+            <div className="field">
+              <label>Aircraft</label>
+              <select value={aircraftId} onChange={(e) => setAircraftId(e.target.value)} required>
+                <option value="">Select aircraft…</option>
+                {aircraftList.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {aircraftOptionLabel(a)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         <LogEntryFields logEntry={logEntry} updateLog={updateLog} routes={routes} />

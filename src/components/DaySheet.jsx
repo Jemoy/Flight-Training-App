@@ -24,6 +24,7 @@ export default function DaySheet({ date, entriesBySlot, onEntryClick }) {
                 <tr key={i}>
                   <td className="ds-cell ds-instructor"></td>
                   <td className="ds-cell ds-student"></td>
+                  <td className="ds-cell ds-resource"></td>
                   <td className="ds-cell ds-hours"></td>
                 </tr>
               )
@@ -38,6 +39,7 @@ export default function DaySheet({ date, entriesBySlot, onEntryClick }) {
                 >
                   <td className="ds-cell ds-instructor">{instructorInitials(entry.instructorName)}</td>
                   <td className="ds-cell ds-student">{studentDisplayName(entry.studentName)}</td>
+                  <td className="ds-cell ds-resource">{entry.simulatorName ?? entry.aircraftName ?? '—'}</td>
                   <td className="ds-cell ds-hours">{entry.cumulativeHours ?? ''}</td>
                 </tr>
               )

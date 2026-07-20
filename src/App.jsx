@@ -18,6 +18,8 @@ import SubjectManagement from './pages/SubjectManagement'
 import RouteManagement from './pages/RouteManagement'
 import InstructorHoursReport from './pages/InstructorHoursReport'
 import StageApprovals from './pages/StageApprovals'
+import AircraftManagement from './pages/AircraftManagement'
+import Profile from './pages/Profile'
 import ProtectedRoute from './components/ProtectedRoute'
 import FacultyRoute from './components/FacultyRoute'
 
@@ -60,12 +62,13 @@ export default function App() {
         }
       >
         <Route index element={<Home session={session} profile={profile} profileLoading={profileLoading} />} />
+        <Route path="profile" element={<Profile session={session} />} />
         <Route path="payments" element={<Payments session={session} />} />
         <Route path="schedule" element={<Schedule session={session} />} />
         <Route
           path="faculty/payments"
           element={
-            <FacultyRoute profile={profile} loading={profileLoading}>
+            <FacultyRoute profile={profile} loading={profileLoading} roles={['admin']}>
               <FacultyPayments session={session} />
             </FacultyRoute>
           }
@@ -87,9 +90,17 @@ export default function App() {
           }
         />
         <Route
+          path="admin/aircraft"
+          element={
+            <FacultyRoute profile={profile} loading={profileLoading} roles={['admin']}>
+              <AircraftManagement />
+            </FacultyRoute>
+          }
+        />
+        <Route
           path="faculty/schedule"
           element={
-            <FacultyRoute profile={profile} loading={profileLoading}>
+            <FacultyRoute profile={profile} loading={profileLoading} roles={['faculty_personnel', 'admin', 'student']}>
               <FullSchedule profile={profile} />
             </FacultyRoute>
           }
@@ -183,12 +194,12 @@ function Shell({ profile }) {
             <>
               <Link to="/payments">Payments</Link>
               <Link to="/schedule">Schedule</Link>
+              <Link to="/faculty/schedule">Full schedule</Link>
             </>
           )}
           {isFaculty && (
             <>
               <div className="sidebar-divider">Faculty</div>
-              <Link to="/faculty/payments">Verify payments</Link>
               <Link to="/faculty/evaluations">Evaluations</Link>
               <Link to="/faculty/schedule">Full schedule</Link>
               <Link to="/faculty/students">Students</Link>
@@ -197,7 +208,9 @@ function Shell({ profile }) {
           {isAdmin && (
             <>
               <div className="sidebar-divider">Admin</div>
+              <Link to="/faculty/payments">Verify payments</Link>
               <Link to="/admin/stage-approvals">Stage approvals</Link>
+              <Link to="/admin/aircraft">Aircraft</Link>
               <Link to="/admin/create-student">Create student</Link>
               <Link to="/admin/faculty">Faculty</Link>
               <Link to="/admin/instructor-hours">Instructor hours</Link>
@@ -206,8 +219,23 @@ function Shell({ profile }) {
               <Link to="/admin/routes">Routes</Link>
             </>
           )}
-          <button onClick={handleSignOut}>Sign out</button>
         </nav>
+
+        <div className="sidebar-footer">
+          <Link to="/profile" className="sidebar-profile-link">
+            <span className="sidebar-avatar">
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="" />
+              ) : (
+                <span className="sidebar-avatar-placeholder">
+                  {(profile?.full_name || '?').trim().charAt(0).toUpperCase()}
+                </span>
+              )}
+            </span>
+            <span className="sidebar-profile-name">{profile?.full_name ?? 'Profile'}</span>
+          </Link>
+          <button onClick={handleSignOut}>Sign out</button>
+        </div>
       </aside>
       <Outlet />
     </div>

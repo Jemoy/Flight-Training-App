@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { SIM_SLOTS, slotStartDate, slotEndDate, findSlotIndexForDate } from '../lib/simSlots'
 import { getSimulatorsForStage } from '../lib/stageSimulators'
+import { aircraftMaintenanceStatus, aircraftOptionLabel } from '../lib/aircraftStatus'
 
 function toDateInputValue(d) {
   const yyyy = d.getFullYear()
@@ -15,8 +16,11 @@ export default function EditSessionModal({ entry, onClose, onSaved }) {
   const [slotIndex, setSlotIndex] = useState(String(Math.max(0, findSlotIndexForDate(entry.start))))
   const [instructorId, setInstructorId] = useState(entry.instructorId ?? '')
   const [simulatorId, setSimulatorId] = useState(entry.simulatorId ?? '')
+  const [aircraftId, setAircraftId] = useState(entry.aircraftId ?? '')
   const [facultyList, setFacultyList] = useState([])
   const [simOptions, setSimOptions] = useState([])
+  const [aircraftOptions, setAircraftOptions] = useState([])
+  const [requiresSimulator, setRequiresSimulator] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -25,12 +29,16 @@ export default function EditSessionModal({ entry, onClose, onSaved }) {
   }, [])
 
   async function loadOptions() {
-    const [{ data: faculty }, sims] = await Promise.all([
+    const [{ data: faculty }, sims, { data: stage }, { data: activeAircraft }] = await Promise.all([
       supabase.from('profiles').select('id, full_name').eq('role', 'faculty_personnel').order('full_name'),
       getSimulatorsForStage(entry.stageId),
+      supabase.from('stages').select('requires_simulator').eq('id', entry.stageId).single(),
+      supabase.from('aircraft').select('id, aircraft_type, registry, hours_before_50hr_maintenance, hours_before_100hr_maintenance').eq('is_active', true).order('registry'),
     ])
     setFacultyList(faculty ?? [])
     setSimOptions(sims)
+    setAircraftOptions(activeAircraft ?? [])
+    setRequiresSimulator(stage?.requires_simulator !== false)
   }
 
   async function handleSave() {
@@ -39,9 +47,23 @@ export default function EditSessionModal({ entry, onClose, onSaved }) {
       setError('Select an instructor.')
       return
     }
-    if (!simulatorId) {
+    if (requiresSimulator && !simulatorId) {
       setError('Select a simulator.')
       return
+    }
+    if (!requiresSimulator && !aircraftId) {
+      setError('Select an aircraft.')
+      return
+    }
+
+    if (!requiresSimulator) {
+      const chosenAircraft = aircraftOptions.find((a) => a.id === aircraftId)
+      if (aircraftMaintenanceStatus(chosenAircraft) === 'due') {
+        const proceed = window.confirm(
+          `${chosenAircraft.aircraft_type} — ${chosenAircraft.registry} is due for maintenance. Proceed anyway?`
+        )
+        if (!proceed) return
+      }
     }
 
     const dayDate = new Date(`${date}T00:00`)
@@ -52,24 +74,48 @@ export default function EditSessionModal({ entry, onClose, onSaved }) {
 
     // Conflict check: same simulator OR same instructor already booked
     // elsewhere at the new time (excluding this session itself).
-    const { data: simConflicts, error: simErr } = await supabase
-      .from('sessions')
-      .select('id, scheduled_start')
-      .eq('simulator_id', simulatorId)
-      .eq('status', 'scheduled')
-      .neq('id', entry.sessionId)
-      .lt('scheduled_start', newEnd.toISOString())
-      .gt('scheduled_end', newStart.toISOString())
+    if (requiresSimulator) {
+      const { data: simConflicts, error: simErr } = await supabase
+        .from('sessions')
+        .select('id, scheduled_start')
+        .eq('simulator_id', simulatorId)
+        .eq('status', 'scheduled')
+        .neq('id', entry.sessionId)
+        .lt('scheduled_start', newEnd.toISOString())
+        .gt('scheduled_end', newStart.toISOString())
 
-    if (simErr) {
-      setError(`Could not check simulator availability: ${simErr.message}`)
-      setSubmitting(false)
-      return
+      if (simErr) {
+        setError(`Could not check simulator availability: ${simErr.message}`)
+        setSubmitting(false)
+        return
+      }
+      if (simConflicts && simConflicts.length > 0) {
+        setError(`That simulator is already booked at ${new Date(simConflicts[0].scheduled_start).toLocaleString()}.`)
+        setSubmitting(false)
+        return
+      }
     }
-    if (simConflicts && simConflicts.length > 0) {
-      setError(`That simulator is already booked at ${new Date(simConflicts[0].scheduled_start).toLocaleString()}.`)
-      setSubmitting(false)
-      return
+
+    if (!requiresSimulator) {
+      const { data: acConflicts, error: acErr } = await supabase
+        .from('sessions')
+        .select('id, scheduled_start')
+        .eq('aircraft_id', aircraftId)
+        .eq('status', 'scheduled')
+        .neq('id', entry.sessionId)
+        .lt('scheduled_start', newEnd.toISOString())
+        .gt('scheduled_end', newStart.toISOString())
+
+      if (acErr) {
+        setError(`Could not check aircraft availability: ${acErr.message}`)
+        setSubmitting(false)
+        return
+      }
+      if (acConflicts && acConflicts.length > 0) {
+        setError(`That aircraft is already booked at ${new Date(acConflicts[0].scheduled_start).toLocaleString()}.`)
+        setSubmitting(false)
+        return
+      }
     }
 
     const { data: instrConflicts, error: instrErr } = await supabase
@@ -100,7 +146,8 @@ export default function EditSessionModal({ entry, onClose, onSaved }) {
         scheduled_start: newStart.toISOString(),
         scheduled_end: newEnd.toISOString(),
         instructor_id: instructorId,
-        simulator_id: simulatorId,
+        simulator_id: requiresSimulator ? simulatorId : null,
+        aircraft_id: requiresSimulator ? null : aircraftId,
       })
       .eq('id', entry.sessionId)
 
@@ -122,7 +169,7 @@ export default function EditSessionModal({ entry, onClose, onSaved }) {
         </div>
         <div className="page-subheading" style={{ marginBottom: 18 }}>
           {entry.studentName} · currently {entry.instructorName ?? 'Unassigned'} ·{' '}
-          {entry.simulatorName ?? 'No simulator'}
+          {entry.aircraftName ?? entry.simulatorName ?? 'No resource assigned'}
         </div>
 
         {error && <div className="auth-error">{error}</div>}
@@ -155,17 +202,38 @@ export default function EditSessionModal({ entry, onClose, onSaved }) {
           </select>
         </div>
 
-        <div className="field">
-          <label htmlFor="editSimulator">Simulator</label>
-          <select id="editSimulator" value={simulatorId} onChange={(e) => setSimulatorId(e.target.value)}>
-            <option value="">Select simulator…</option>
-            {simOptions.map((sim) => (
-              <option key={sim.id} value={sim.id}>
-                {sim.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {requiresSimulator ? (
+          <div className="field">
+            <label htmlFor="editSimulator">Simulator</label>
+            <select id="editSimulator" value={simulatorId} onChange={(e) => setSimulatorId(e.target.value)}>
+              <option value="">Select simulator…</option>
+              {simOptions.map((sim) => (
+                <option key={sim.id} value={sim.id}>
+                  {sim.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="field">
+            <label htmlFor="editAircraft">Aircraft</label>
+            <select id="editAircraft" value={aircraftId} onChange={(e) => setAircraftId(e.target.value)}>
+              <option value="">Select aircraft…</option>
+              {aircraftOptions.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {aircraftOptionLabel(a)}
+                </option>
+              ))}
+            </select>
+            {aircraftId && aircraftMaintenanceStatus(aircraftOptions.find((a) => a.id === aircraftId)) !== 'ok' && (
+              <p className="auth-error" style={{ marginTop: 6 }}>
+                {aircraftMaintenanceStatus(aircraftOptions.find((a) => a.id === aircraftId)) === 'due'
+                  ? 'This aircraft is due for maintenance.'
+                  : 'This aircraft is close to needing maintenance.'}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="row-actions" style={{ marginTop: 18 }}>
           <button className="btn-approve" onClick={handleSave} disabled={submitting}>

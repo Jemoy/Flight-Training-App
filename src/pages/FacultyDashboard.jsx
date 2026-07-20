@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { TRACK_LABELS } from '../lib/stageStatus'
 
 function formatHM(decimalHours) {
   const h = Math.floor(decimalHours)
@@ -16,7 +17,10 @@ const CATEGORY_COLS = [
   { key: 'cc_pic', category: 'cross_country', duty: 'pic' },
 ]
 
+const TABS = ['simulator', 'ppl', 'cpl', 'ir', 'build_time']
+
 export default function FacultyDashboard({ profile }) {
+  const [activeTab, setActiveTab] = useState('simulator')
   const [rows, setRows] = useState([])
   const [simulators, setSimulators] = useState([])
   const [studentSearch, setStudentSearch] = useState('')
@@ -41,7 +45,7 @@ export default function FacultyDashboard({ profile }) {
     const { data, error } = await supabase
       .from('session_participants')
       .select(
-        'hours_credited, profiles(full_name, student_number), sessions!inner(scheduled_start, aircraft_type, route_from, route_to, flight_category, duty_type, status, simulator_id, stages(name), simulator:simulators(name))'
+        'hours_credited, profiles(full_name, student_number), sessions!inner(scheduled_start, aircraft_type, route_from, route_to, flight_category, duty_type, status, simulator_id, stages(name, track), simulator:simulators(name), aircraft:aircraft(aircraft_type, registry))'
       )
       .eq('sessions.status', 'completed')
       .order('scheduled_start', { foreignTable: 'sessions', ascending: false })
@@ -59,9 +63,10 @@ export default function FacultyDashboard({ profile }) {
         studentName: row.profiles?.full_name ?? 'Unknown',
         studentNumber: row.profiles?.student_number ?? '—',
         stageName: s.stages?.name ?? '—',
+        track: s.stages?.track,
         aircraftType: s.aircraft_type ?? '—',
         simulatorId: s.simulator_id,
-        simulatorName: s.simulator?.name ?? '—',
+        simulatorName: s.simulator?.name ?? (s.aircraft ? s.aircraft.registry : '—'),
         routeFrom: s.route_from ?? '—',
         routeTo: s.route_to ?? '—',
         category: s.flight_category,
@@ -79,13 +84,26 @@ export default function FacultyDashboard({ profile }) {
     return rows
       .filter((r) => !term || r.studentName.toLowerCase().includes(term) || r.studentNumber.toLowerCase().includes(term))
       .filter((r) => !simulatorFilter || r.simulatorId === simulatorFilter)
-  }, [rows, studentSearch, simulatorFilter])
+      .filter((r) => activeTab === 'build_time' || r.track === activeTab)
+  }, [rows, studentSearch, simulatorFilter, activeTab])
 
   return (
     <div className="main-content main-content-wide">
       <div className="page-heading">Flight Training Records</div>
       <div className="page-subheading">
         Every completed session across all students. Search or filter to narrow it down.
+      </div>
+
+      <div className="tab-bar">
+        {TABS.map((t) => (
+          <button
+            key={t}
+            className={`tab-btn ${activeTab === t ? 'active' : ''}`}
+            onClick={() => setActiveTab(t)}
+          >
+            {TRACK_LABELS[t]}
+          </button>
+        ))}
       </div>
 
       <div className="filter-row">

@@ -33,6 +33,8 @@ export default function FullSchedule({ profile }) {
   const [facultyFilter, setFacultyFilter] = useState('')
   const [simulatorList, setSimulatorList] = useState([])
   const [simulatorFilter, setSimulatorFilter] = useState('')
+  const [aircraftList, setAircraftList] = useState([])
+  const [aircraftFilter, setAircraftFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editingEntry, setEditingEntry] = useState(null)
@@ -42,7 +44,17 @@ export default function FullSchedule({ profile }) {
     loadSchedule()
     loadFaculty()
     loadSimulators()
+    loadAircraft()
   }, [])
+
+  async function loadAircraft() {
+    const { data } = await supabase
+      .from('aircraft')
+      .select('id, aircraft_type, registry')
+      .eq('is_active', true)
+      .order('registry', { ascending: true })
+    setAircraftList(data ?? [])
+  }
 
   async function loadFaculty() {
     const { data } = await supabase
@@ -65,7 +77,7 @@ export default function FullSchedule({ profile }) {
     const { data, error } = await supabase
       .from('session_participants')
       .select(
-        'student_id, hours_credited, profiles(full_name), sessions(id, scheduled_start, status, stage_id, instructor_id, simulator_id, instructor:profiles!sessions_instructor_id_fkey(full_name), simulator:simulators(name))'
+        'student_id, hours_credited, profiles(full_name), sessions(id, scheduled_start, status, stage_id, instructor_id, simulator_id, aircraft_id, instructor:profiles!sessions_instructor_id_fkey(full_name), simulator:simulators(name), aircraft:aircraft(aircraft_type, registry))'
       )
 
     if (error) {
@@ -95,6 +107,8 @@ export default function FullSchedule({ profile }) {
         instructorName: row.sessions.instructor?.full_name,
         simulatorId: row.sessions.simulator_id,
         simulatorName: row.sessions.simulator?.name,
+        aircraftId: row.sessions.aircraft_id,
+        aircraftName: row.sessions.aircraft ? `${row.sessions.aircraft.aircraft_type} — ${row.sessions.aircraft.registry}` : null,
         cumulativeHours: Math.round(runningTotals[key] * 100) / 100,
       }
     })
@@ -117,6 +131,7 @@ export default function FullSchedule({ profile }) {
     return rows
       .filter((r) => !facultyFilter || r.instructorId === facultyFilter)
       .filter((r) => !simulatorFilter || r.simulatorId === simulatorFilter)
+      .filter((r) => !aircraftFilter || r.aircraftId === aircraftFilter)
   }
 
   const entriesBySlot = useMemo(() => {
@@ -126,7 +141,7 @@ export default function FullSchedule({ profile }) {
       if (idx >= 0) slots[idx].push(r)
     })
     return slots
-  }, [rawRows, currentDate, facultyFilter, simulatorFilter])
+  }, [rawRows, currentDate, facultyFilter, simulatorFilter, aircraftFilter])
 
   const weekDays = useMemo(() => weekDaysFor(currentDate), [currentDate])
 
@@ -139,15 +154,15 @@ export default function FullSchedule({ profile }) {
       })
       return slots
     })
-  }, [rawRows, weekDays, facultyFilter, simulatorFilter])
+  }, [rawRows, weekDays, facultyFilter, simulatorFilter, aircraftFilter])
 
   return (
     <div className="main-content main-content-wide">
-      <div className="page-heading">Full simulator schedule</div>
+      <div className="page-heading">Full schedule</div>
       <div className="page-subheading">
-        Daily operations sheet — instructor, student, and running total simulator hours
-        for that stage as of each session.
-        {isAdmin && ' Click any session to reassign its date, slot, instructor, or simulator.'}
+        Daily operations sheet — instructor, student, and running total hours for that
+        stage as of each session.
+        {isAdmin && ' Click any session to reassign its date, slot, instructor, simulator, or aircraft.'}
       </div>
 
       <div className="filter-row">
@@ -170,6 +185,18 @@ export default function FullSchedule({ profile }) {
             {simulatorList.map((sim) => (
               <option key={sim.id} value={sim.id}>
                 {sim.name} Schedule
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field" style={{ maxWidth: 320 }}>
+          <label htmlFor="aircraftFilter">Aircraft</label>
+          <select id="aircraftFilter" value={aircraftFilter} onChange={(e) => setAircraftFilter(e.target.value)}>
+            <option value="">All aircraft</option>
+            {aircraftList.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.aircraft_type} — {a.registry}
               </option>
             ))}
           </select>
