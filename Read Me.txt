@@ -1,0 +1,4 @@
+For Local host:
+
+cd C:\Users\mendo\Documents\flight-training-app
+npm run dev

@@ -7,3 +7,4 @@ alter table sessions add column if not exists payment_id uuid references payment
 -- payments.session_id from the previous migration is no longer used by the app —
 -- safe to leave in place (harmless) or drop it if you'd rather clean it up:
 -- alter table payments drop column if exists session_id;
+alter table payments drop column if exists session_id;

@@ -16,10 +16,7 @@ import {
   subMonths,
   subWeeks,
 } from 'date-fns'
-
-const HOUR_START = 6
-const HOUR_END = 21 // 9pm
-const HOUR_HEIGHT = 48 // px per hour row
+import { SIM_SLOTS, slotStartDate, findSlotIndexForDate } from '../lib/simSlots'
 
 // events: [{ id, start: Date, end: Date, title, type, subtitle? }]
 // type drives color: 'class' | 'mine' | 'booked' | 'admin'
@@ -99,9 +96,6 @@ function TimeGrid({ view, currentDate, events, onSlotClick }) {
     return eachDayOfInterval({ start, end: endOfWeek(currentDate, { weekStartsOn: 0 }) })
   }, [view, currentDate])
 
-  const hours = []
-  for (let h = HOUR_START; h <= HOUR_END; h++) hours.push(h)
-
   return (
     <div className="cal-timegrid">
       <div className="cal-timegrid-header">
@@ -114,52 +108,39 @@ function TimeGrid({ view, currentDate, events, onSlotClick }) {
         ))}
       </div>
 
-      <div className="cal-timegrid-body" style={{ height: (HOUR_END - HOUR_START + 1) * HOUR_HEIGHT }}>
-        <div className="cal-time-gutter">
-          {hours.map((h) => (
-            <div key={h} className="cal-hour-label" style={{ height: HOUR_HEIGHT }}>
-              {formatHour(h)}
+      <div className="cal-slotgrid-body">
+        {SIM_SLOTS.map((slot, slotIdx) => (
+          <div className="cal-slot-row" key={slotIdx}>
+            <div className="cal-slot-label">
+              {slot.start}–{slot.end}
             </div>
-          ))}
-        </div>
-
-        {days.map((day) => {
-          const dayEvents = events.filter((e) => isSameDay(e.start, day))
-          return (
-            <div key={day.toISOString()} className="cal-day-col">
-              {hours.map((h) => (
+            {days.map((day) => {
+              const cellEvents = events.filter(
+                (e) => isSameDay(e.start, day) && findSlotIndexForDate(e.start) === slotIdx
+              )
+              const isEmpty = cellEvents.length === 0
+              return (
                 <div
-                  key={h}
-                  className="cal-hour-slot"
-                  style={{ height: HOUR_HEIGHT }}
-                  onClick={() => onSlotClick && onSlotClick(setHour(day, h))}
-                />
-              ))}
-              {dayEvents.map((e) => (
-                <EventBlock key={e.id} event={e} />
-              ))}
-            </div>
-          )
-        })}
+                  key={day.toISOString()}
+                  className={`cal-slot-cell ${isEmpty ? 'empty' : ''}`}
+                  onClick={() => isEmpty && onSlotClick && onSlotClick(slotStartDate(day, slotIdx))}
+                >
+                  {cellEvents.map((e) => (
+                    <div
+                      key={e.id}
+                      className={`cal-event-flat cal-event-${e.type}`}
+                      title={e.subtitle ?? e.title}
+                    >
+                      <div className="cal-event-title">{e.title}</div>
+                      {e.subtitle && <div className="cal-event-subtitle">{e.subtitle}</div>}
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+        ))}
       </div>
-    </div>
-  )
-}
-
-function EventBlock({ event }) {
-  const startMinutes = (event.start.getHours() - HOUR_START) * 60 + event.start.getMinutes()
-  const durationMinutes = Math.max(20, (event.end - event.start) / 60000)
-  const top = (startMinutes / 60) * HOUR_HEIGHT
-  const height = (durationMinutes / 60) * HOUR_HEIGHT
-
-  return (
-    <div
-      className={`cal-event cal-event-${event.type}`}
-      style={{ top, height }}
-      title={event.subtitle ?? event.title}
-    >
-      <div className="cal-event-title">{event.title}</div>
-      {event.subtitle && <div className="cal-event-subtitle">{event.subtitle}</div>}
     </div>
   )
 }
@@ -201,14 +182,4 @@ function MonthGrid({ currentDate, events, onDayClick }) {
   )
 }
 
-function setHour(date, hour) {
-  const d = new Date(date)
-  d.setHours(hour, 0, 0, 0)
-  return d
-}
 
-function formatHour(h) {
-  const period = h >= 12 ? 'PM' : 'AM'
-  const hour12 = h % 12 === 0 ? 12 : h % 12
-  return `${hour12} ${period}`
-}

@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import Calendar from '../components/Calendar'
+import { SIM_SLOTS, slotStartDate, slotEndDate, findSlotIndexForDate } from '../lib/simSlots'
 
 export default function Schedule({ session }) {
   const [availability, setAvailability] = useState([]) // [{stage_id, stage_name, available_hours}]
   const [stageId, setStageId] = useState('')
   const [date, setDate] = useState('')
-  const [startTime, setStartTime] = useState('')
-  const [durationHours, setDurationHours] = useState('1')
+  const [slotIndex, setSlotIndex] = useState('')
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -131,8 +131,8 @@ export default function Schedule({ session }) {
 
   function handleSlotClick(clickedDate) {
     setDate(formatDateInput(clickedDate))
-    setStartTime(formatTimeInput(clickedDate))
-    // scroll the form into view on smaller screens
+    const idx = findSlotIndexForDate(clickedDate)
+    setSlotIndex(idx >= 0 ? String(idx) : '')
     document.getElementById('booking-form')?.scrollIntoView({ behavior: 'smooth' })
   }
 
@@ -141,13 +141,14 @@ export default function Schedule({ session }) {
     setError('')
     setSuccessMsg('')
 
-    if (!stageId || !date || !startTime || !durationHours) {
-      setError('Please fill in every field.')
+    if (!stageId || !date || slotIndex === '') {
+      setError('Please select a stage, date, and slot.')
       return
     }
 
-    const start = new Date(`${date}T${startTime}`)
-    const end = new Date(start.getTime() + Number(durationHours) * 60 * 60 * 1000)
+    const dayDate = new Date(`${date}T00:00`)
+    const start = slotStartDate(dayDate, Number(slotIndex))
+    const end = slotEndDate(dayDate, Number(slotIndex))
 
     setSubmitting(true)
 
@@ -170,12 +171,12 @@ export default function Schedule({ session }) {
     })
 
     if (conflict) {
-      setError(`This time conflicts with your class "${conflict.class_name}". Pick another time.`)
+      setError(`This time conflicts with your class "${conflict.class_name}". Pick another slot.`)
       setSubmitting(false)
       return
     }
 
-    // Create the session (instructor assigned later by admin)
+    // Create the session (instructor and simulator assigned later by admin)
     const { data: newSession, error: sessionError } = await supabase
       .from('sessions')
       .insert({
@@ -196,7 +197,7 @@ export default function Schedule({ session }) {
     const { error: participantError } = await supabase.from('session_participants').insert({
       session_id: newSession.id,
       student_id: session.user.id,
-      hours_credited: Number(durationHours),
+      hours_credited: 1,
     })
 
     if (participantError) {
@@ -205,10 +206,9 @@ export default function Schedule({ session }) {
       return
     }
 
-    setSuccessMsg('Session booked. An instructor will be assigned by the scheduling office.')
+    setSuccessMsg('Session booked. An instructor and simulator will be assigned by the scheduling office.')
     setDate('')
-    setStartTime('')
-    setDurationHours('1')
+    setSlotIndex('')
     await Promise.all([loadAvailability(), loadMySessions(), loadCalendar()])
     setSubmitting(false)
   }
@@ -259,27 +259,15 @@ export default function Schedule({ session }) {
           </div>
 
           <div className="field">
-            <label htmlFor="startTime">Start time</label>
-            <input
-              id="startTime"
-              type="time"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className="field">
-            <label htmlFor="duration">Duration (hours)</label>
-            <input
-              id="duration"
-              type="number"
-              step="0.5"
-              min="0.5"
-              value={durationHours}
-              onChange={(e) => setDurationHours(e.target.value)}
-              required
-            />
+            <label htmlFor="slot">Slot</label>
+            <select id="slot" value={slotIndex} onChange={(e) => setSlotIndex(e.target.value)} required>
+              <option value="">Select a slot…</option>
+              {SIM_SLOTS.map((s, i) => (
+                <option key={i} value={i}>
+                  {s.start}–{s.end}
+                </option>
+              ))}
+            </select>
           </div>
 
           <button className="btn-primary" type="submit" disabled={submitting}>
@@ -331,10 +319,4 @@ function formatDateInput(d) {
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const dd = String(d.getDate()).padStart(2, '0')
   return `${yyyy}-${mm}-${dd}`
-}
-
-function formatTimeInput(d) {
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${hh}:${mm}`
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
 export default function Login() {
@@ -10,6 +10,8 @@ export default function Login() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const wasDeactivated = searchParams.get('deactivated') === '1'
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -49,6 +51,12 @@ export default function Login() {
         </div>
 
         {error && <div className="auth-error">{error}</div>}
+        {wasDeactivated && (
+          <div className="auth-error">
+            This account has been deactivated. Contact your school administrator if you
+            believe this is a mistake.
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           {mode === 'sign_up' && (

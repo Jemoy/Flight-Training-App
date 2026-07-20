@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import Calendar from '../components/Calendar'
+import { getSimulatorsForStage } from '../lib/stageSimulators'
 
 export default function Payments({ session }) {
   const [stages, setStages] = useState([])
@@ -19,8 +20,11 @@ export default function Payments({ session }) {
   const [calView, setCalView] = useState('week')
   const [calDate, setCalDate] = useState(new Date())
   const [calEvents, setCalEvents] = useState([])
+  const [stageSimulators, setStageSimulators] = useState([])
+  const [simulatorFilter, setSimulatorFilter] = useState('') // '' = all simulators
 
   const requiredSlots = Number(hoursCovered) || 0
+  const selectedStage = stages.find((s) => s.id === stageId)
 
   useEffect(() => {
     loadStages()
@@ -28,10 +32,26 @@ export default function Payments({ session }) {
     loadCalendar()
   }, [])
 
+  useEffect(() => {
+    if (!stageId) {
+      setStageSimulators([])
+      setSimulatorFilter('')
+      return
+    }
+    setSimulatorFilter('')
+    getSimulatorsForStage(stageId).then(setStageSimulators)
+  }, [stageId])
+
+  function compatibleSimulatorCount() {
+    // Explicit admin-assigned mapping — a stage with nothing configured yet
+    // has zero valid simulators, so booking is correctly blocked until set up.
+    return stageSimulators.length
+  }
+
   async function loadStages() {
     const { data, error } = await supabase
       .from('stages')
-      .select('id, name, code')
+      .select('id, name, code, instrument_type')
       .eq('track', 'simulator')
       .order('sequence_order', { ascending: true })
 
@@ -43,7 +63,7 @@ export default function Payments({ session }) {
     const { data, error } = await supabase
       .from('payments')
       .select(
-        'id, amount, hours_covered, status, submitted_at, stage_id, stages(name), sessions(scheduled_start, status)'
+        'id, amount, hours_covered, status, submitted_at, stage_id, stages(name), sessions!sessions_payment_id_fkey(scheduled_start, status)'
       )
       .eq('student_id', session.user.id)
       .order('submitted_at', { ascending: false })
@@ -59,7 +79,7 @@ export default function Payments({ session }) {
 
     const { data: allParticipants } = await supabase
       .from('session_participants')
-      .select('student_id, sessions(id, scheduled_start, scheduled_end, status, stages(name))')
+      .select('student_id, sessions(id, scheduled_start, scheduled_end, status, simulator_id, stages(name))')
 
     const { data: classes } = await supabase
       .from('class_schedule')
@@ -86,6 +106,8 @@ export default function Payments({ session }) {
           ? 'Pending approval'
           : 'Booked',
         type: isMine ? (isPending ? 'pending' : 'mine') : isPending ? 'pending' : 'booked',
+        simulatorId: s.simulator_id ?? null,
+        isMine,
       })
     }
 
@@ -102,7 +124,10 @@ export default function Payments({ session }) {
 
   function isSlotTaken(slotStart) {
     const slotEnd = new Date(slotStart.getTime() + 60 * 60 * 1000)
-    return calEvents.some((e) => e.type !== 'class' ? slotStart < e.end && slotEnd > e.start : false)
+    const overlapCount = calEvents.filter(
+      (e) => e.type !== 'class' && slotStart < e.end && slotEnd > e.start
+    ).length
+    return overlapCount >= compatibleSimulatorCount()
   }
 
   function isSlotSelected(slotStart) {
@@ -111,8 +136,7 @@ export default function Payments({ session }) {
 
   function handleSlotClick(clickedDate) {
     setError('')
-    const slotStart = new Date(clickedDate)
-    slotStart.setMinutes(0, 0, 0) // snap to the hour — bookings are per 1-hour block
+    const slotStart = new Date(clickedDate) // already an exact SIM_SLOTS start time
 
     if (isSlotSelected(slotStart)) {
       setSelectedSlots((prev) => prev.filter((s) => s.getTime() !== slotStart.getTime()))
@@ -137,10 +161,19 @@ export default function Payments({ session }) {
     setSelectedSlots((prev) => [...prev, slotStart].sort((a, b) => a - b))
   }
 
+  // When viewing a specific simulator, only show confirmed bookings on that
+  // exact unit (plus the student's own stuff and classes, always). Pending
+  // requests aren't shown per-simulator since none has been assigned yet.
+  const simulatorFilteredEvents = simulatorFilter
+    ? calEvents.filter(
+        (e) => e.type === 'class' || e.isMine || (e.type === 'booked' && e.simulatorId === simulatorFilter)
+      )
+    : calEvents
+
   // Overlay the student's in-progress selections on the calendar as "mine" so
   // they're visible before submitting (not yet saved to the database).
   const displayEvents = [
-    ...calEvents,
+    ...simulatorFilteredEvents,
     ...selectedSlots.map((s, i) => ({
       id: `selected-${i}`,
       start: s,
@@ -271,14 +304,34 @@ export default function Payments({ session }) {
       </div>
 
       <div className="payments-layout">
-        <Calendar
-          view={calView}
-          currentDate={calDate}
-          onViewChange={setCalView}
-          onDateChange={setCalDate}
-          events={displayEvents}
-          onSlotClick={handleSlotClick}
-        />
+        <div>
+          {stageSimulators.length > 0 && (
+            <div className="field" style={{ maxWidth: 320, marginBottom: 12 }}>
+              <label htmlFor="simFilter">View simulator schedule</label>
+              <select
+                id="simFilter"
+                value={simulatorFilter}
+                onChange={(e) => setSimulatorFilter(e.target.value)}
+              >
+                <option value="">All simulators (combined availability)</option>
+                {stageSimulators.map((sim) => (
+                  <option key={sim.id} value={sim.id}>
+                    {sim.name} Schedule
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <Calendar
+            view={calView}
+            currentDate={calDate}
+            onViewChange={setCalView}
+            onDateChange={setCalDate}
+            events={displayEvents}
+            onSlotClick={handleSlotClick}
+          />
+        </div>
 
         <form onSubmit={handleSubmit} className="payment-form">
           {error && <div className="auth-error">{error}</div>}
@@ -294,6 +347,16 @@ export default function Payments({ session }) {
                 </option>
               ))}
             </select>
+            {stageId && stageSimulators.length === 0 && (
+              <p className="auth-error" style={{ marginTop: 8 }}>
+                No simulators are assigned to this stage yet — contact the office before booking.
+              </p>
+            )}
+            {stageId && stageSimulators.length > 0 && (
+              <p className="empty-text" style={{ marginTop: 8 }}>
+                Uses: {stageSimulators.map((s) => s.name).join(', ')}
+              </p>
+            )}
           </div>
 
           <div className="field">

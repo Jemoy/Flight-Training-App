@@ -11,6 +11,13 @@ import FacultyEvaluations from './pages/FacultyEvaluations'
 import AdminCreateStudent from './pages/AdminCreateStudent'
 import FullSchedule from './pages/FullSchedule'
 import FacultyDashboard from './pages/FacultyDashboard'
+import StudentsList from './pages/StudentsList'
+import FacultyManagement from './pages/FacultyManagement'
+import SimulatorManagement from './pages/SimulatorManagement'
+import SubjectManagement from './pages/SubjectManagement'
+import RouteManagement from './pages/RouteManagement'
+import InstructorHoursReport from './pages/InstructorHoursReport'
+import StageApprovals from './pages/StageApprovals'
 import ProtectedRoute from './components/ProtectedRoute'
 import FacultyRoute from './components/FacultyRoute'
 
@@ -18,6 +25,7 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const { profile, loading: profileLoading } = useProfile(session)
+  const navigate = useNavigate()
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -31,6 +39,14 @@ export default function App() {
 
     return () => listener.subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    if (!profileLoading && profile && profile.is_active === false) {
+      supabase.auth.signOut().then(() => {
+        navigate('/login?deactivated=1')
+      })
+    }
+  }, [profile, profileLoading])
 
   return (
     <Routes>
@@ -58,7 +74,15 @@ export default function App() {
           path="faculty/evaluations"
           element={
             <FacultyRoute profile={profile} loading={profileLoading}>
-              <FacultyEvaluations session={session} />
+              <FacultyEvaluations session={session} profile={profile} />
+            </FacultyRoute>
+          }
+        />
+        <Route
+          path="admin/stage-approvals"
+          element={
+            <FacultyRoute profile={profile} loading={profileLoading} roles={['admin']}>
+              <StageApprovals session={session} />
             </FacultyRoute>
           }
         />
@@ -66,7 +90,15 @@ export default function App() {
           path="faculty/schedule"
           element={
             <FacultyRoute profile={profile} loading={profileLoading}>
-              <FullSchedule />
+              <FullSchedule profile={profile} />
+            </FacultyRoute>
+          }
+        />
+        <Route
+          path="faculty/students"
+          element={
+            <FacultyRoute profile={profile} loading={profileLoading}>
+              <StudentsList profile={profile} session={session} />
             </FacultyRoute>
           }
         />
@@ -75,6 +107,46 @@ export default function App() {
           element={
             <FacultyRoute profile={profile} loading={profileLoading} roles={['admin']}>
               <AdminCreateStudent />
+            </FacultyRoute>
+          }
+        />
+        <Route
+          path="admin/faculty"
+          element={
+            <FacultyRoute profile={profile} loading={profileLoading} roles={['admin']}>
+              <FacultyManagement />
+            </FacultyRoute>
+          }
+        />
+        <Route
+          path="admin/instructor-hours"
+          element={
+            <FacultyRoute profile={profile} loading={profileLoading} roles={['admin']}>
+              <InstructorHoursReport />
+            </FacultyRoute>
+          }
+        />
+        <Route
+          path="admin/simulators"
+          element={
+            <FacultyRoute profile={profile} loading={profileLoading} roles={['admin']}>
+              <SimulatorManagement />
+            </FacultyRoute>
+          }
+        />
+        <Route
+          path="admin/subjects"
+          element={
+            <FacultyRoute profile={profile} loading={profileLoading} roles={['admin']}>
+              <SubjectManagement />
+            </FacultyRoute>
+          }
+        />
+        <Route
+          path="admin/routes"
+          element={
+            <FacultyRoute profile={profile} loading={profileLoading} roles={['admin']}>
+              <RouteManagement />
             </FacultyRoute>
           }
         />
@@ -119,12 +191,19 @@ function Shell({ profile }) {
               <Link to="/faculty/payments">Verify payments</Link>
               <Link to="/faculty/evaluations">Evaluations</Link>
               <Link to="/faculty/schedule">Full schedule</Link>
+              <Link to="/faculty/students">Students</Link>
             </>
           )}
           {isAdmin && (
             <>
               <div className="sidebar-divider">Admin</div>
+              <Link to="/admin/stage-approvals">Stage approvals</Link>
               <Link to="/admin/create-student">Create student</Link>
+              <Link to="/admin/faculty">Faculty</Link>
+              <Link to="/admin/instructor-hours">Instructor hours</Link>
+              <Link to="/admin/simulators">Simulators</Link>
+              <Link to="/admin/subjects">Subjects</Link>
+              <Link to="/admin/routes">Routes</Link>
             </>
           )}
           <button onClick={handleSignOut}>Sign out</button>
