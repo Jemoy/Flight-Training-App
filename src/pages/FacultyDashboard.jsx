@@ -45,7 +45,7 @@ export default function FacultyDashboard({ profile }) {
     const { data, error } = await supabase
       .from('session_participants')
       .select(
-        'hours_credited, profiles(full_name, student_number), sessions!inner(scheduled_start, aircraft_type, route_from, route_to, flight_category, duty_type, status, simulator_id, stages(name, track), simulator:simulators(name), aircraft:aircraft(aircraft_type, registry))'
+        'hours_credited, profiles(full_name, student_number), sessions!inner(scheduled_start, aircraft_type, check_type, route_from, route_to, flight_category, duty_type, status, simulator_id, stages(name, track), simulator:simulators(name), aircraft:aircraft(aircraft_type, registry))'
       )
       .eq('sessions.status', 'completed')
       .order('scheduled_start', { foreignTable: 'sessions', ascending: false })
@@ -66,7 +66,7 @@ export default function FacultyDashboard({ profile }) {
         track: s.stages?.track,
         aircraftType: s.aircraft_type ?? '—',
         simulatorId: s.simulator_id,
-        simulatorName: s.simulator?.name ?? (s.aircraft ? s.aircraft.registry : '—'),
+        simulatorName: s.check_type || s.simulator?.name || (s.aircraft ? s.aircraft.registry : '—'),
         routeFrom: s.route_from ?? '—',
         routeTo: s.route_to ?? '—',
         category: s.flight_category,

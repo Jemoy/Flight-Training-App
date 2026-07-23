@@ -52,7 +52,7 @@ export default function Dashboard({ session }) {
     setProfileInfo(profileRow)
 
     const [{ data: stages, error: stageErr }, { data: prereqs }, { data: progressRows }] = await Promise.all([
-      supabase.from('stages').select('id, name, track, sequence_order, required_hours, manual_completion_only'),
+      supabase.from('stages').select('id, name, code, track, sequence_order, required_hours, manual_completion_only'),
       supabase.from('stage_prerequisites').select('stage_id, prerequisite_stage_id'),
       supabase.from('student_stage_progress').select('stage_id, status, cumulative_hours').eq('student_id', userId),
     ])
@@ -68,7 +68,7 @@ export default function Dashboard({ session }) {
     const { data: rows, error: rowsErr } = await supabase
       .from('session_participants')
       .select(
-        'hours_credited, sessions!inner(scheduled_start, stage_id, aircraft_type, route_from, route_to, flight_category, duty_type, status, simulator:simulators(name), aircraft:aircraft(aircraft_type, registry), instructor:profiles!sessions_instructor_id_fkey(full_name), stages(name, track))'
+        'hours_credited, sessions!inner(scheduled_start, stage_id, aircraft_type, check_type, route_from, route_to, flight_category, duty_type, status, simulator:simulators(name), aircraft:aircraft(aircraft_type, registry), instructor:profiles!sessions_instructor_id_fkey(full_name), stages(name, track))'
       )
       .eq('student_id', userId)
       .eq('sessions.status', 'completed')
@@ -89,7 +89,7 @@ export default function Dashboard({ session }) {
         stageName: s.stages?.name ?? '—',
         track: s.stages?.track,
         aircraftType: s.aircraft_type ?? '—',
-        simulatorName: s.simulator?.name ?? (s.aircraft ? s.aircraft.registry : '—'),
+        simulatorName: s.check_type || s.simulator?.name || (s.aircraft ? s.aircraft.registry : '—'),
         routeFrom: s.route_from ?? '—',
         routeTo: s.route_to ?? '—',
         category: s.flight_category,
@@ -256,6 +256,7 @@ export default function Dashboard({ session }) {
             stageGroupsToShow.map((stage, gi) => {
               const entries = entriesByStage[stage.id] ?? []
               const subtotal = subtotalFor(entries)
+              const isVA = stage.code === 'FS_VA'
               return (
                 <div key={gi} style={{ overflowX: 'auto', marginBottom: 24 }}>
                   <table className="logbook-table">
@@ -263,9 +264,13 @@ export default function Dashboard({ session }) {
                       <tr>
                         <th rowSpan={2}>Date</th>
                         <th colSpan={3}>Simulator</th>
-                        <th colSpan={2}>Route</th>
-                        <th colSpan={3}>Local</th>
-                        <th colSpan={3}>Cross Country</th>
+                        {!isVA && (
+                          <>
+                            <th colSpan={2}>Route</th>
+                            <th colSpan={3}>Local</th>
+                            <th colSpan={3}>Cross Country</th>
+                          </>
+                        )}
                         <th rowSpan={2}>Time</th>
                         <th rowSpan={2}>Instructor</th>
                       </tr>
@@ -273,20 +278,24 @@ export default function Dashboard({ session }) {
                         <th>Stage</th>
                         <th>Type</th>
                         <th>Type/Rating</th>
-                        <th>From</th>
-                        <th>To</th>
-                        <th>Dual</th>
-                        <th>Solo</th>
-                        <th>PIC</th>
-                        <th>Dual</th>
-                        <th>Solo</th>
-                        <th>PIC</th>
+                        {!isVA && (
+                          <>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>Dual</th>
+                            <th>Solo</th>
+                            <th>PIC</th>
+                            <th>Dual</th>
+                            <th>Solo</th>
+                            <th>PIC</th>
+                          </>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
                       {entries.length === 0 ? (
                         <tr>
-                          <td colSpan={13} className="empty-text" style={{ textAlign: 'left' }}>
+                          <td colSpan={isVA ? 6 : 13} className="empty-text" style={{ textAlign: 'left' }}>
                             {stage.name} — {STATUS_LABEL[stage.status]}, no sessions logged yet.
                           </td>
                         </tr>
@@ -297,13 +306,17 @@ export default function Dashboard({ session }) {
                             <td>{stage.name}</td>
                             <td>{e.aircraftType}</td>
                             <td>{e.simulatorName}</td>
-                            <td>{e.routeFrom}</td>
-                            <td>{e.routeTo}</td>
-                            {CATEGORY_COLS.map((col) => (
-                              <td key={col.key} className="hours-figure">
-                                {e.category === col.category && e.duty === col.duty ? formatHM(e.hours) : formatHM(0)}
-                              </td>
-                            ))}
+                            {!isVA && (
+                              <>
+                                <td>{e.routeFrom}</td>
+                                <td>{e.routeTo}</td>
+                                {CATEGORY_COLS.map((col) => (
+                                  <td key={col.key} className="hours-figure">
+                                    {e.category === col.category && e.duty === col.duty ? formatHM(e.hours) : formatHM(0)}
+                                  </td>
+                                ))}
+                              </>
+                            )}
                             <td className="hours-figure">{formatHM(e.hours)}</td>
                             <td>{e.instructorName}</td>
                           </tr>
@@ -311,12 +324,13 @@ export default function Dashboard({ session }) {
                       )}
                       {entries.length > 0 && (
                         <tr className="logbook-subtotal-row">
-                          <td colSpan={6}>Stage Completion</td>
-                          {CATEGORY_COLS.map((col) => (
-                            <td key={col.key} className="hours-figure">
-                              {formatHM(subtotal[col.key])}
-                            </td>
-                          ))}
+                          <td colSpan={isVA ? 3 : 6}>Stage Completion</td>
+                          {!isVA &&
+                            CATEGORY_COLS.map((col) => (
+                              <td key={col.key} className="hours-figure">
+                                {formatHM(subtotal[col.key])}
+                              </td>
+                            ))}
                           <td className="hours-figure">{formatHM(subtotal.time)}</td>
                           <td></td>
                         </tr>

@@ -10,10 +10,10 @@ export const DUTY_OPTIONS = [
 ]
 
 export function emptyLogEntry() {
-  return { aircraftType: '', routeFrom: '', routeTo: '', category: 'local', duty: 'dual', hours: '1' }
+  return { aircraftType: '', checkType: '', routeFrom: '', routeTo: '', category: 'local', duty: 'dual', hours: '1' }
 }
 
-export default function LogEntryFields({ logEntry, updateLog, routes }) {
+export default function LogEntryFields({ logEntry, updateLog, routes, lockTypeToVA }) {
   return (
     <>
       <div className="backfill-form-row">
@@ -24,6 +24,16 @@ export default function LogEntryFields({ logEntry, updateLog, routes }) {
             placeholder="e.g. C-150"
             value={logEntry.aircraftType}
             onChange={(e) => updateLog('aircraftType', e.target.value)}
+            disabled={lockTypeToVA}
+          />
+        </div>
+        <div className="field">
+          <label>Type/Rating</label>
+          <input
+            type="text"
+            placeholder="e.g. 360 Check"
+            value={logEntry.checkType}
+            onChange={(e) => updateLog('checkType', e.target.value)}
           />
         </div>
         <div className="field">

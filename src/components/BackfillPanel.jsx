@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient'
 import LogEntryFields, { emptyLogEntry } from './LogEntryFields'
 import { TRACK_LABELS } from '../lib/stageStatus'
 import { aircraftOptionLabel } from '../lib/aircraftStatus'
+import { getAircraftForStage } from '../lib/stageAircraft'
 
 const ALL_TRACKS = ['simulator', 'ppl', 'cpl', 'ir', 'multi_engine']
 
@@ -25,11 +26,24 @@ export default function BackfillPanel({ studentId, currentUserId }) {
 
   const selectedStage = stages.find((s) => s.id === stageId)
   const needsAircraft = selectedStage?.requires_simulator === false
+  const needsVA = selectedStage?.code === 'FS_VA'
+
+  useEffect(() => {
+    if (needsVA) updateLog('aircraftType', 'VA')
+  }, [needsVA])
+
+  useEffect(() => {
+    if (!needsAircraft) {
+      setAircraftList([])
+      return
+    }
+    getAircraftForStage(stageId).then(setAircraftList)
+  }, [stageId, needsAircraft])
 
   useEffect(() => {
     supabase
       .from('stages')
-      .select('id, name, track, sequence_order, requires_simulator')
+      .select('id, name, track, sequence_order, requires_simulator, code')
       .order('sequence_order', { ascending: true })
       .then(({ data }) => setStages(data ?? []))
 
@@ -45,13 +59,6 @@ export default function BackfillPanel({ studentId, currentUserId }) {
       .eq('role', 'faculty_personnel')
       .order('full_name', { ascending: true })
       .then(({ data }) => setFaculty(data ?? []))
-
-    supabase
-      .from('aircraft')
-      .select('id, aircraft_type, registry, hours_before_50hr_maintenance, hours_before_100hr_maintenance')
-      .eq('is_active', true)
-      .order('registry', { ascending: true })
-      .then(({ data }) => setAircraftList(data ?? []))
   }, [])
 
   function updateLog(field, value) {
@@ -103,6 +110,7 @@ export default function BackfillPanel({ studentId, currentUserId }) {
         status: 'pending',
         instructor_id: instructorId,
         aircraft_type: logEntry.aircraftType.trim(),
+        check_type: logEntry.checkType.trim() || null,
         route_from: logEntry.routeFrom,
         route_to: logEntry.routeTo,
         flight_category: logEntry.category,
@@ -236,7 +244,7 @@ export default function BackfillPanel({ studentId, currentUserId }) {
           )}
         </div>
 
-        <LogEntryFields logEntry={logEntry} updateLog={updateLog} routes={routes} />
+        <LogEntryFields logEntry={logEntry} updateLog={updateLog} routes={routes} lockTypeToVA={needsVA} />
 
         <div className="field">
           <label>Notes (optional)</label>

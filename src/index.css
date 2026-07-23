@@ -1108,6 +1108,35 @@ a {
   cursor: pointer;
 }
 
+.search-results-dropdown {
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.search-result-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+
+.search-result-row:last-child {
+  border-bottom: none;
+}
+
+.search-result-row:hover {
+  background: var(--cloud);
+}
+
 .tab-bar {
   display: flex;
   gap: 4px;
@@ -1295,25 +1324,9 @@ a {
   margin-bottom: 8px;
 }
 
-.matrix-table {
-  overflow-x: auto;
-  display: block;
-}
-
 .matrix-col-header {
-  text-align: center;
   font-size: 0.7rem;
   white-space: nowrap;
-}
-
-.matrix-checkbox-cell {
-  text-align: center;
-}
-
-.matrix-checkbox-cell input {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
 }
 
 .create-student-layout {
@@ -1836,4 +1849,342 @@ a {
 
 .cal-dot.class {
   background: #c3cad1;
+}
+
+/* ---------- Aircraft / Simulator management polish ---------- */
+
+.page-heading-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.page-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: rgba(232, 163, 61, 0.14);
+  color: var(--amber);
+  flex-shrink: 0;
+}
+
+.page-heading-row .page-heading {
+  margin-bottom: 0;
+}
+
+.mgmt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.mgmt-toolbar .btn-primary {
+  width: auto;
+  margin-bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.mgmt-summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 0.82rem;
+  color: var(--slate);
+}
+
+.mgmt-summary strong {
+  color: var(--navy);
+  font-family: var(--font-mono);
+}
+
+.mgmt-summary .due-flag {
+  color: #a12f2f;
+  font-weight: 600;
+}
+
+/* Add / edit form card */
+
+.form-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px 24px 24px;
+  margin-bottom: 28px;
+  max-width: 560px;
+  box-shadow: 0 4px 18px rgba(11, 30, 51, 0.05);
+}
+
+.form-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.form-card-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.02rem;
+}
+
+.form-card .payment-form,
+.form-card form {
+  margin-bottom: 0;
+  max-width: none;
+  border: none;
+  padding: 0;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--slate);
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--cloud);
+  color: var(--navy);
+}
+
+/* Hours-to-maintenance meter */
+
+.hours-meter {
+  min-width: 108px;
+}
+
+.hours-meter-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.hours-meter-unit {
+  font-family: var(--font-body);
+  color: var(--slate);
+  font-size: 0.72rem;
+}
+
+.hours-meter-track {
+  height: 4px;
+  background: var(--cloud);
+  border-radius: 4px;
+  margin-top: 5px;
+  overflow: hidden;
+}
+
+.hours-meter-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--teal);
+}
+
+.hours-meter.warn .hours-meter-fill { background: var(--amber); }
+.hours-meter.warn .hours-meter-top { color: #a06a1c; }
+
+.hours-meter.due .hours-meter-fill { background: #c94b4b; }
+.hours-meter.due .hours-meter-top { color: #a12f2f; font-weight: 600; }
+
+.hours-meter-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 2px;
+}
+
+/* Status cell with sub-line */
+
+.status-cell-sub {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--slate);
+  margin-top: 3px;
+}
+
+/* Type rating badges (simulators) */
+
+.type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin: 0 4px 2px 0;
+  white-space: nowrap;
+}
+
+.type-badge.basic_simulator { background: var(--cloud); color: var(--slate); }
+.type-badge.atd { background: #fdf1de; color: #a06a1c; }
+.type-badge.aatd { background: #e9f7f1; color: #1f6e52; }
+.type-badge.va { background: var(--navy); color: #fff; }
+
+/* Type chip picker (used in add/edit forms in place of bare checkboxes) */
+
+.type-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.type-chip {
+  position: relative;
+}
+
+.type-chip input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.type-chip span {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--slate);
+  background: var(--panel);
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.type-chip input:checked + span {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+
+.type-chip input:focus-visible + span {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+}
+
+/* Assignment matrix */
+
+.matrix-table-wrap {
+  max-height: 460px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.matrix-table-wrap .matrix-table {
+  border: none;
+  border-radius: 0;
+  width: auto;
+}
+
+.matrix-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 2;
+}
+
+.matrix-table tbody th,
+.matrix-table td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--panel);
+  z-index: 1;
+  min-width: 200px;
+}
+
+.matrix-table thead th:first-child {
+  z-index: 3;
+}
+
+.matrix-col-header {
+  text-align: center !important;
+  width: 76px;
+}
+
+.matrix-checkbox-cell {
+  padding: 0 !important;
+  text-align: center;
+  border-left: 1px solid var(--border);
+  width: 76px;
+}
+
+.matrix-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  cursor: pointer;
+}
+
+.matrix-toggle input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.matrix-toggle-mark {
+  width: 19px;
+  height: 19px;
+  border-radius: 5px;
+  border: 1.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  background: var(--panel);
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.matrix-toggle:hover .matrix-toggle-mark {
+  border-color: var(--teal);
+}
+
+.matrix-toggle input:checked + .matrix-toggle-mark {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+
+.matrix-toggle input:focus-visible + .matrix-toggle-mark {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.matrix-toggle input:disabled + .matrix-toggle-mark {
+  opacity: 0.5;
+}
+
+/* Empty state */
+
+.empty-state {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--slate);
+  font-size: 0.88rem;
+  background: var(--panel);
 }

@@ -41,7 +41,7 @@ export default function FacultyEvaluations({ session, profile }) {
     let query = supabase
       .from('session_participants')
       .select(
-        'id, student_id, session_id, hours_credited, profiles(full_name), sessions!inner(id, scheduled_start, status, instructor_id, stage_id, stages(name, required_hours), instructor:profiles!sessions_instructor_id_fkey(full_name))'
+        'id, student_id, session_id, hours_credited, profiles(full_name), sessions!inner(id, scheduled_start, status, instructor_id, stage_id, stages(name, code, required_hours), instructor:profiles!sessions_instructor_id_fkey(full_name))'
       )
 
     if (!isAdmin) {
@@ -99,7 +99,7 @@ export default function FacultyEvaluations({ session, profile }) {
     const { data, error } = await supabase
       .from('evaluations')
       .select(
-        'id, session_id, student_id, result, notes, recommend_advance, profiles!evaluations_student_id_fkey(full_name), sessions(scheduled_start, stage_id, aircraft_type, route_from, route_to, flight_category, duty_type, stages(name, required_hours))'
+        'id, session_id, student_id, result, notes, recommend_advance, profiles!evaluations_student_id_fkey(full_name), sessions(scheduled_start, stage_id, aircraft_type, check_type, route_from, route_to, flight_category, duty_type, stages(name, code, required_hours))'
       )
       .eq('evaluator_id', session.user.id)
       .order('created_at', { ascending: false })
@@ -180,6 +180,7 @@ export default function FacultyEvaluations({ session, profile }) {
       .update({
         status: 'completed',
         aircraft_type: logEntry.aircraftType.trim(),
+        check_type: logEntry.checkType.trim() || null,
         route_from: logEntry.routeFrom,
         route_to: logEntry.routeTo,
         flight_category: logEntry.category,
@@ -223,6 +224,7 @@ export default function FacultyEvaluations({ session, profile }) {
     setEditRecommendAdvance(ev.recommend_advance ?? null)
     setEditLog({
       aircraftType: ev.sessions?.aircraft_type ?? '',
+      checkType: ev.sessions?.check_type ?? '',
       routeFrom: ev.sessions?.route_from ?? '',
       routeTo: ev.sessions?.route_to ?? '',
       category: ev.sessions?.flight_category ?? 'local',
@@ -261,6 +263,7 @@ export default function FacultyEvaluations({ session, profile }) {
       .from('sessions')
       .update({
         aircraft_type: editLog.aircraftType.trim(),
+        check_type: editLog.checkType.trim() || null,
         route_from: editLog.routeFrom,
         route_to: editLog.routeTo,
         flight_category: editLog.category,
@@ -345,7 +348,11 @@ export default function FacultyEvaluations({ session, profile }) {
                       className="link-btn"
                       onClick={() => {
                         setOpenRowId(p.id)
-                        setLogEntry({ ...emptyLogEntry(), hours: String(p.hours_credited ?? 1) })
+                        setLogEntry({
+                          ...emptyLogEntry(),
+                          hours: String(p.hours_credited ?? 1),
+                          aircraftType: p.sessions?.stages?.code === 'FS_VA' ? 'VA' : '',
+                        })
                         setRecommendAdvance(null)
                       }}
                     >
@@ -363,6 +370,7 @@ export default function FacultyEvaluations({ session, profile }) {
                         if (field === 'hours') setRecommendAdvance(null)
                       }}
                       routes={routes}
+                      lockTypeToVA={p.sessions?.stages?.code === 'FS_VA'}
                     />
 
                     {willCross && (
@@ -478,7 +486,12 @@ export default function FacultyEvaluations({ session, profile }) {
 
                     {editingEvalId === ev.id && (
                       <div className="eval-form">
-                        <LogEntryFields logEntry={editLog} updateLog={updateEditLog} routes={routes} />
+                        <LogEntryFields
+                          logEntry={editLog}
+                          updateLog={updateEditLog}
+                          routes={routes}
+                          lockTypeToVA={ev.sessions?.stages?.code === 'FS_VA'}
+                        />
 
                         {editWillCross && (
                           <div className="recommend-advance-box">

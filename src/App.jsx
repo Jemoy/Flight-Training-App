@@ -5,11 +5,12 @@ import { useProfile } from './hooks/useProfile'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Payments from './pages/Payments'
-import Schedule from './pages/Schedule'
+import FullSchedule from './pages/FullSchedule'
 import FacultyPayments from './pages/FacultyPayments'
 import FacultyEvaluations from './pages/FacultyEvaluations'
 import AdminCreateStudent from './pages/AdminCreateStudent'
-import FullSchedule from './pages/FullSchedule'
+import AdminScheduling from './pages/AdminScheduling'
+import RotationScheduling from './pages/RotationScheduling'
 import FacultyDashboard from './pages/FacultyDashboard'
 import StudentsList from './pages/StudentsList'
 import FacultyManagement from './pages/FacultyManagement'
@@ -64,7 +65,6 @@ export default function App() {
         <Route index element={<Home session={session} profile={profile} profileLoading={profileLoading} />} />
         <Route path="profile" element={<Profile session={session} />} />
         <Route path="payments" element={<Payments session={session} />} />
-        <Route path="schedule" element={<Schedule session={session} />} />
         <Route
           path="faculty/payments"
           element={
@@ -94,6 +94,22 @@ export default function App() {
           element={
             <FacultyRoute profile={profile} loading={profileLoading} roles={['admin']}>
               <AircraftManagement />
+            </FacultyRoute>
+          }
+        />
+        <Route
+          path="admin/scheduling"
+          element={
+            <FacultyRoute profile={profile} loading={profileLoading} roles={['admin']}>
+              <AdminScheduling />
+            </FacultyRoute>
+          }
+        />
+        <Route
+          path="admin/rotation-scheduling"
+          element={
+            <FacultyRoute profile={profile} loading={profileLoading} roles={['admin']}>
+              <RotationScheduling session={session} />
             </FacultyRoute>
           }
         />
@@ -193,7 +209,6 @@ function Shell({ profile }) {
           {!isFaculty && (
             <>
               <Link to="/payments">Payments</Link>
-              <Link to="/schedule">Schedule</Link>
               <Link to="/faculty/schedule">Full schedule</Link>
             </>
           )}
@@ -209,6 +224,8 @@ function Shell({ profile }) {
             <>
               <div className="sidebar-divider">Admin</div>
               <Link to="/faculty/payments">Verify payments</Link>
+              <Link to="/admin/scheduling">Scheduling</Link>
+              <Link to="/admin/rotation-scheduling">Rotation Scheduling</Link>
               <Link to="/admin/stage-approvals">Stage approvals</Link>
               <Link to="/admin/aircraft">Aircraft</Link>
               <Link to="/admin/create-student">Create student</Link>

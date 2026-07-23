@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient'
 import { SIM_SLOTS, slotStartDate, slotEndDate, findSlotIndexForDate } from '../lib/simSlots'
 import { getSimulatorsForStage } from '../lib/stageSimulators'
 import { aircraftMaintenanceStatus, aircraftOptionLabel } from '../lib/aircraftStatus'
+import { getAircraftForStage } from '../lib/stageAircraft'
 
 function toDateInputValue(d) {
   const yyyy = d.getFullYear()
@@ -29,15 +30,15 @@ export default function EditSessionModal({ entry, onClose, onSaved }) {
   }, [])
 
   async function loadOptions() {
-    const [{ data: faculty }, sims, { data: stage }, { data: activeAircraft }] = await Promise.all([
+    const [{ data: faculty }, sims, { data: stage }, activeAircraft] = await Promise.all([
       supabase.from('profiles').select('id, full_name').eq('role', 'faculty_personnel').order('full_name'),
       getSimulatorsForStage(entry.stageId),
       supabase.from('stages').select('requires_simulator').eq('id', entry.stageId).single(),
-      supabase.from('aircraft').select('id, aircraft_type, registry, hours_before_50hr_maintenance, hours_before_100hr_maintenance').eq('is_active', true).order('registry'),
+      getAircraftForStage(entry.stageId),
     ])
     setFacultyList(faculty ?? [])
     setSimOptions(sims)
-    setAircraftOptions(activeAircraft ?? [])
+    setAircraftOptions(activeAircraft)
     setRequiresSimulator(stage?.requires_simulator !== false)
   }
 
